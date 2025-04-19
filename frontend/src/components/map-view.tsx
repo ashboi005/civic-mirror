@@ -2,22 +2,10 @@
 
 import { useEffect, useRef } from "react"
 import { MapPin } from "lucide-react"
-
-interface Issue {
-  id: number
-  title: string
-  description: string
-  category: string
-  status: string
-  location: string
-  date: string
-  votes: number
-  comments: number
-  image: string
-}
+import { Report } from "@/lib/api"
 
 interface MapViewProps {
-  issues: Issue[]
+  issues: Report[]
 }
 
 export function MapView({ issues }: MapViewProps) {
@@ -116,16 +104,16 @@ export function MapView({ issues }: MapViewProps) {
         const left = 10 + index * 15 + Math.random() * 50
         const top = 10 + index * 10 + Math.random() * 400
 
-        const getMarkerColor = (status: string) => {
+        const getMarkerColor = (status: string | undefined) => {
           switch (status) {
-            case "Open":
+            case "pending":
               return "text-yellow-500 bg-yellow-500/20"
-            case "In Progress":
+            case "in_progress":
               return "text-blue-500 bg-blue-500/20"
-            case "Resolved":
+            case "resolved":
               return "text-green-500 bg-green-500/20"
             default:
-              return "text-gray-500 bg-gray-500/20"
+              return "text-yellow-500 bg-yellow-500/20" // Default to pending
           }
         }
 
@@ -141,7 +129,7 @@ export function MapView({ issues }: MapViewProps) {
             <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
               <div className="bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs max-w-[200px]">
                 <p className="font-semibold">{issue.title}</p>
-                <p className="text-gray-400 text-xs mt-1">{issue.location}</p>
+                <p className="text-gray-400 text-xs mt-1">{issue.location || 'Unknown location'}</p>
               </div>
             </div>
           </div>

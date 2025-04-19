@@ -2,31 +2,28 @@
 
 import { useEffect, useRef } from "react"
 import { MapPin } from "lucide-react"
+import { Report } from "@/lib/api"
 
-interface Issue {
-  id: number
-  title: string
-  description: string
-  category: string
-  status: string
-  location: string
-  date: string
-  votes: number
-  comments: number
-  image: string
+// Enhanced report type with coordinates for map display
+export interface MapReport extends Report {
   coordinates: {
-    lat: number
-    lng: number
-  }
+    lat: number;
+    lng: number;
+  };
+  category?: string;
+  date?: string;
+  comments?: number;
+  image?: string;
 }
 
 interface FullMapViewProps {
-  issues: Issue[]
-  onSelectIssue: (issue: Issue) => void
-  selectedIssueId?: number
+  issues: MapReport[];
+  onSelectIssue: (issue: MapReport) => void;
+  selectedIssueId?: number;
+  onVote?: () => void;
 }
 
-export function FullMapView({ issues, onSelectIssue, selectedIssueId }: FullMapViewProps) {
+export function FullMapView({ issues, onSelectIssue, selectedIssueId, onVote }: FullMapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -114,34 +111,46 @@ export function FullMapView({ issues, onSelectIssue, selectedIssueId }: FullMapV
     }
   }, [])
 
-  const getMarkerColor = (status: string) => {
+  const getMarkerColor = (status: string | undefined) => {
     switch (status) {
-      case "Open":
+      case "pending":
         return "text-yellow-500 bg-yellow-500/20"
-      case "In Progress":
+      case "in_progress":
         return "text-blue-500 bg-blue-500/20"
-      case "Resolved":
+      case "resolved":
         return "text-green-500 bg-green-500/20"
       default:
-        return "text-gray-500 bg-gray-500/20"
+        return "text-yellow-500 bg-yellow-500/20" // Default to pending
     }
   }
+
+  // Generate map positions for issues
+  const issuesWithPositions = issues.map((issue, index) => {
+    // We're using the coordinates from the MapReport
+    const { lat, lng } = issue.coordinates;
+    
+    // Scale coordinates to viewport percentages
+    // This is just a simple example, real maps would use proper projections
+    const left = ((lng + 74.006) * 1000) % 80 + 10; // Just a formula to spread things across the map
+    const top = ((lat - 40.7128) * 1000) % 400 + 50;
+    
+    return {
+      ...issue,
+      position: { left, top }
+    };
+  });
 
   return (
     <div className="relative h-full w-full" ref={mapRef}>
       {/* Issue markers */}
-      {issues.map((issue, index) => {
-        // Generate random positions for demo
-        const left = 10 + index * 15 + Math.random() * 50
-        const top = 10 + index * 10 + Math.random() * 400
-
+      {issuesWithPositions.map((issue) => {
         return (
           <div
             key={issue.id}
             className={`absolute flex flex-col items-center group cursor-pointer transition-transform duration-200 ${
               selectedIssueId === issue.id ? "scale-125 z-10" : "hover:scale-110"
             }`}
-            style={{ left: `${left}%`, top: `${top}px` }}
+            style={{ left: `${issue.position.left}%`, top: `${issue.position.top}px` }}
             onClick={() => onSelectIssue(issue)}
           >
             <div
@@ -154,7 +163,7 @@ export function FullMapView({ issues, onSelectIssue, selectedIssueId }: FullMapV
             <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
               <div className="bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs max-w-[200px]">
                 <p className="font-semibold">{issue.title}</p>
-                <p className="text-gray-400 text-xs mt-1">{issue.location}</p>
+                <p className="text-gray-400 text-xs mt-1">{issue.location || 'Unknown location'}</p>
               </div>
             </div>
           </div>

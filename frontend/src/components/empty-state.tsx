@@ -1,9 +1,9 @@
-import { Bell, FileText, ThumbsUp, Users } from "lucide-react"
+import { AlertTriangle, Bell, FileText, ThumbsUp, Users } from "lucide-react"
 
 interface EmptyStateProps {
   title: string
   description: string
-  icon: "bell" | "file-text" | "thumbs-up" | "users"
+  icon: "bell" | "file-text" | "thumbs-up" | "users" | "alert-triangle"
 }
 
 export function EmptyState({ title, description, icon }: EmptyStateProps) {
@@ -17,6 +17,8 @@ export function EmptyState({ title, description, icon }: EmptyStateProps) {
         return <ThumbsUp className="h-12 w-12 text-gray-500" />
       case "users":
         return <Users className="h-12 w-12 text-gray-500" />
+      case "alert-triangle":
+        return <AlertTriangle className="h-12 w-12 text-gray-500" />
       default:
         return <Bell className="h-12 w-12 text-gray-500" />
     }

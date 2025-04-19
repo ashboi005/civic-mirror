@@ -1,64 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Filter } from "lucide-react"
+import { Filter, Loader2 } from "lucide-react"
 import { IssueCard } from "@/components/issue-card"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
 import { EmptyState } from "@/components/empty-state"
-
-// Mock data for issues
-const myIssues = [
-  {
-    id: 1,
-    title: "Pothole on Main Street",
-    description: "Large pothole causing traffic issues",
-    category: "Road",
-    status: "Open",
-    location: "123 Main St",
-    date: "2024-04-15",
-    votes: 24,
-    comments: 5,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 2,
-    title: "Broken Street Light",
-    description: "Street light not working for past week",
-    category: "Lighting",
-    status: "In Progress",
-    location: "456 Oak Ave",
-    date: "2024-04-14",
-    votes: 18,
-    comments: 3,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 3,
-    title: "Garbage Overflow",
-    description: "Garbage bins overflowing in park",
-    category: "Sanitation",
-    status: "Resolved",
-    location: "Central Park",
-    date: "2024-04-10",
-    votes: 32,
-    comments: 7,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-]
+import { getUserReports, Report } from "@/lib/api"
 
 export default function ReportsPage() {
-  const [filter, setFilter] = useState<"all" | "open" | "inProgress" | "resolved">("all")
+  const [filter, setFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all")
+  const [reports, setReports] = useState<Report[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredIssues = myIssues.filter((issue) => {
+  // Fetch user reports on component mount
+  useEffect(() => {
+    const fetchReports = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await getUserReports(0, 50)
+        setReports(data)
+      } catch (err) {
+        console.error("Failed to fetch user reports:", err)
+        setError("Failed to load your reports. Please try again later.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchReports()
+  }, [])
+
+  // Handle voting to refresh reports
+  const handleVote = async () => {
+    try {
+      const data = await getUserReports(0, 50)
+      setReports(data)
+    } catch (err) {
+      console.error("Failed to refresh reports after voting:", err)
+    }
+  }
+
+  const filteredReports = reports.filter((report) => {
     if (filter === "all") return true
-    if (filter === "open") return issue.status === "Open"
-    if (filter === "inProgress") return issue.status === "In Progress"
-    if (filter === "resolved") return issue.status === "Resolved"
-    return true
+    return report.status === filter
   })
 
   const container = {
@@ -95,114 +85,128 @@ export default function ReportsPage() {
               </Button>
             </div>
 
-            <Tabs defaultValue="all" className="w-full">
-              <TabsList className="bg-gray-800/50 mb-6">
-                <TabsTrigger value="all" onClick={() => setFilter("all")}>
-                  All
-                </TabsTrigger>
-                <TabsTrigger value="open" onClick={() => setFilter("open")}>
-                  Open
-                </TabsTrigger>
-                <TabsTrigger value="inProgress" onClick={() => setFilter("inProgress")}>
-                  In Progress
-                </TabsTrigger>
-                <TabsTrigger value="resolved" onClick={() => setFilter("resolved")}>
-                  Resolved
-                </TabsTrigger>
-              </TabsList>
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="py-8">
+                <EmptyState
+                  title="Error loading reports"
+                  description={error}
+                  icon="alert-triangle"
+                />
+              </div>
+            ) : (
+              <Tabs defaultValue="all" className="w-full">
+                <TabsList className="bg-gray-800/50 mb-6">
+                  <TabsTrigger value="all" onClick={() => setFilter("all")}>
+                    All
+                  </TabsTrigger>
+                  <TabsTrigger value="pending" onClick={() => setFilter("pending")}>
+                    Pending
+                  </TabsTrigger>
+                  <TabsTrigger value="in_progress" onClick={() => setFilter("in_progress")}>
+                    In Progress
+                  </TabsTrigger>
+                  <TabsTrigger value="resolved" onClick={() => setFilter("resolved")}>
+                    Resolved
+                  </TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="all" className="mt-0">
-                {filteredIssues.length > 0 ? (
-                  <motion.div
-                    className="grid gap-4 md:grid-cols-2"
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                  >
-                    {filteredIssues.map((issue) => (
-                      <motion.div key={issue.id} variants={item}>
-                        <IssueCard issue={issue} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <EmptyState
-                    title="No reports found"
-                    description="You haven't reported any issues matching this filter yet."
-                    icon="file-text"
-                  />
-                )}
-              </TabsContent>
+                <TabsContent value="all" className="mt-0">
+                  {filteredReports.length > 0 ? (
+                    <motion.div
+                      className="grid gap-4 md:grid-cols-2"
+                      variants={container}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {filteredReports.map((report) => (
+                        <motion.div key={report.id} variants={item}>
+                          <IssueCard issue={report} onVote={handleVote} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <EmptyState
+                      title="No reports found"
+                      description="You haven't reported any issues yet."
+                      icon="file-text"
+                    />
+                  )}
+                </TabsContent>
 
-              <TabsContent value="open" className="mt-0">
-                {filteredIssues.length > 0 ? (
-                  <motion.div
-                    className="grid gap-4 md:grid-cols-2"
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                  >
-                    {filteredIssues.map((issue) => (
-                      <motion.div key={issue.id} variants={item}>
-                        <IssueCard issue={issue} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <EmptyState
-                    title="No open reports"
-                    description="You don't have any open reports at the moment."
-                    icon="file-text"
-                  />
-                )}
-              </TabsContent>
+                <TabsContent value="pending" className="mt-0">
+                  {filteredReports.length > 0 ? (
+                    <motion.div
+                      className="grid gap-4 md:grid-cols-2"
+                      variants={container}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {filteredReports.map((report) => (
+                        <motion.div key={report.id} variants={item}>
+                          <IssueCard issue={report} onVote={handleVote} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <EmptyState
+                      title="No pending reports"
+                      description="You don't have any pending reports at the moment."
+                      icon="file-text"
+                    />
+                  )}
+                </TabsContent>
 
-              <TabsContent value="inProgress" className="mt-0">
-                {filteredIssues.length > 0 ? (
-                  <motion.div
-                    className="grid gap-4 md:grid-cols-2"
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                  >
-                    {filteredIssues.map((issue) => (
-                      <motion.div key={issue.id} variants={item}>
-                        <IssueCard issue={issue} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <EmptyState
-                    title="No in-progress reports"
-                    description="You don't have any reports in progress at the moment."
-                    icon="file-text"
-                  />
-                )}
-              </TabsContent>
+                <TabsContent value="in_progress" className="mt-0">
+                  {filteredReports.length > 0 ? (
+                    <motion.div
+                      className="grid gap-4 md:grid-cols-2"
+                      variants={container}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {filteredReports.map((report) => (
+                        <motion.div key={report.id} variants={item}>
+                          <IssueCard issue={report} onVote={handleVote} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <EmptyState
+                      title="No in-progress reports"
+                      description="You don't have any reports in progress at the moment."
+                      icon="file-text"
+                    />
+                  )}
+                </TabsContent>
 
-              <TabsContent value="resolved" className="mt-0">
-                {filteredIssues.length > 0 ? (
-                  <motion.div
-                    className="grid gap-4 md:grid-cols-2"
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                  >
-                    {filteredIssues.map((issue) => (
-                      <motion.div key={issue.id} variants={item}>
-                        <IssueCard issue={issue} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <EmptyState
-                    title="No resolved reports"
-                    description="You don't have any resolved reports yet."
-                    icon="file-text"
-                  />
-                )}
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="resolved" className="mt-0">
+                  {filteredReports.length > 0 ? (
+                    <motion.div
+                      className="grid gap-4 md:grid-cols-2"
+                      variants={container}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {filteredReports.map((report) => (
+                        <motion.div key={report.id} variants={item}>
+                          <IssueCard issue={report} onVote={handleVote} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <EmptyState
+                      title="No resolved reports"
+                      description="You don't have any resolved reports yet."
+                      icon="file-text"
+                    />
+                  )}
+                </TabsContent>
+              </Tabs>
+            )}
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -10,48 +10,114 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MapPin, Upload, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
+import { createReport } from "@/lib/api"
+import { useRouter } from "next/navigation"
 
 interface ReportIssueFormProps {
-  onSubmit: () => void
+  onSubmit?: () => void
 }
 
 export function ReportIssueForm({ onSubmit }: ReportIssueFormProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    type: "",
+    location: "",
+  });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { id, value } = e.target;
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleSelectChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, type: value }));
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader()
+      setImageFile(file);
+      const reader = new FileReader();
       reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
-  }
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false)
-      onSubmit()
-    }, 1500)
-  }
+    try {
+      // Create FormData object for multipart/form-data
+      const reportFormData = new FormData();
+      reportFormData.append("title", formData.title);
+      reportFormData.append("description", formData.description || "");
+      reportFormData.append("type", formData.type);
+      reportFormData.append("location", formData.location || "");
+      
+      if (imageFile) {
+        reportFormData.append("image", imageFile);
+      }
+
+      // Send request to create report
+      const response = await createReport(reportFormData);
+      
+      // Reset form
+      setFormData({
+        title: "",
+        description: "",
+        type: "",
+        location: "",
+      });
+      setImagePreview(null);
+      setImageFile(null);
+      
+      // Call onSubmit callback if provided
+      if (onSubmit) {
+        onSubmit();
+      }
+      
+      // Navigate to community page to see the new report
+      router.push("/dashboard/community");
+      router.refresh();
+      
+    } catch (error) {
+      console.error("Error creating report:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
         <div>
           <Label htmlFor="title">Issue Title</Label>
-          <Input id="title" placeholder="Enter a descriptive title" required />
+          <Input 
+            id="title" 
+            placeholder="Enter a descriptive title" 
+            required 
+            value={formData.title}
+            onChange={handleInputChange}
+          />
         </div>
 
         <div>
-          <Label htmlFor="category">Category</Label>
-          <Select required>
+          <Label htmlFor="type">Category</Label>
+          <Select 
+            required 
+            value={formData.type} 
+            onValueChange={handleSelectChange}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
@@ -60,20 +126,34 @@ export function ReportIssueForm({ onSubmit }: ReportIssueFormProps) {
               <SelectItem value="lighting">Lighting (Street Lights)</SelectItem>
               <SelectItem value="sanitation">Sanitation (Garbage)</SelectItem>
               <SelectItem value="water">Water (Leakage, Drainage)</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value="miscellaneous">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div>
           <Label htmlFor="description">Description</Label>
-          <Textarea id="description" placeholder="Describe the issue in detail" className="min-h-[100px]" required />
+          <Textarea 
+            id="description" 
+            placeholder="Describe the issue in detail" 
+            className="min-h-[100px]" 
+            required
+            value={formData.description}
+            onChange={handleInputChange}
+          />
         </div>
 
         <div>
           <Label htmlFor="location">Location</Label>
           <div className="flex gap-2">
-            <Input id="location" placeholder="Enter address or location" className="flex-1" required />
+            <Input 
+              id="location" 
+              placeholder="Enter address or location" 
+              className="flex-1" 
+              required
+              value={formData.location}
+              onChange={handleInputChange}
+            />
             <Button type="button" variant="outline" size="icon">
               <MapPin className="h-4 w-4" />
             </Button>
@@ -102,7 +182,7 @@ export function ReportIssueForm({ onSubmit }: ReportIssueFormProps) {
                 animate={{ opacity: 1, scale: 1 }}
                 className="h-32 w-32 rounded-md overflow-hidden border border-gray-700"
               >
-                <img src={imagePreview || "/placeholder.svg"} alt="Preview" className="h-full w-full object-cover" />
+                <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
               </motion.div>
             )}
           </div>
