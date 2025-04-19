@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Civic Mirror Backend - FastAPI application deployed on AWS Lambda
+
+Parameters:
+  AWSBucketName:
+    Type: String
+    Description: "S3 bucket name"
+    
+  AWSCloudfrontUrl:
+    Type: String
+    Description: "CloudFront URL"
+
+Resources:
+  FastApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: main.handler
+      Runtime: python3.11
+      CodeUri: .
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        - Statement:
+            - Effect: "Allow"
+              Action:
+                - "ssm:GetParameter"
+                - "ssm:GetParameters"
+                - "ssm:GetParametersByPath"
+              Resource: "arn:aws:ssm:ap-south-1:*:parameter/civicmirror/*"
+        - Statement:
+            - Effect: "Allow"
+              Action:
+                - "s3:PutObject"
+                - "s3:GetObject"
+                - "s3:DeleteObject"
+                - "s3:ListBucket"
+              Resource: 
+                - !Sub "arn:aws:s3:::${AWSBucketName}"
+                - !Sub "arn:aws:s3:::${AWSBucketName}/*"
+      Environment:
+        Variables:
+          AWS_BUCKET_NAME: !Ref AWSBucketName
+          AWS_CLOUDFRONT_URL: !Ref AWSCloudfrontUrl
+          AWS_REGION: "ap-south-1"
+          TWILIO_ACCOUNT_SID: !Ref TwilioAccountSID
+          TWILIO_AUTH_TOKEN: !Ref TwilioAuthToken
+          TWILIO_PHONE_NUMBER: !Ref TwilioPhoneNumber
+          SECRET_KEY: !Ref SecretKey
+          DATABASE_URL: !Ref DatabaseURL
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: "/{proxy+}"
+            Method: ANY
+            RestApiId: !Ref CivicMirrorApiGateway
+
+  CivicMirrorApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: "Prod"
+      BinaryMediaTypes:
+        - image/jpeg
+        - image/png
+        - application/octet-stream
+        - image/webp
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type'"
+              Access-Control-Allow-Methods: "'OPTIONS,GET,POST,PUT,DELETE'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type'"
+              Access-Control-Allow-Methods: "'OPTIONS,GET,POST,PUT,DELETE'"
+
+Outputs:
+  ApiGatewayUrl:
+    Value: !Sub 'https://${CivicMirrorApiGateway}.execute-api.ap-south-1.amazonaws.com/Prod/'
+    Description: The URL of the API Gateway
