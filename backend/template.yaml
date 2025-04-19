@@ -10,6 +10,29 @@ Parameters:
   AWSCloudfrontUrl:
     Type: String
     Description: "CloudFront URL"
+    
+  TwilioAccountSID:
+    Type: String
+    Description: "Twilio Account SID"
+    
+  TwilioAuthToken:
+    Type: String
+    Description: "Twilio Auth Token"
+    NoEcho: true
+    
+  TwilioPhoneNumber:
+    Type: String
+    Description: "Twilio Phone Number"
+    
+  SecretKey:
+    Type: String
+    Description: "Secret key for JWT signing"
+    NoEcho: true
+    
+  DatabaseURL:
+    Type: String
+    Description: "Database connection URL"
+    NoEcho: true
 
 Resources:
   FastApiFunction:
@@ -40,9 +63,10 @@ Resources:
                 - !Sub "arn:aws:s3:::${AWSBucketName}/*"
       Environment:
         Variables:
+          ENVIRONMENT: "production"
           AWS_BUCKET_NAME: !Ref AWSBucketName
           AWS_CLOUDFRONT_URL: !Ref AWSCloudfrontUrl
-          AWS_REGION: "ap-south-1"
+          CUSTOM_AWS_REGION: "ap-south-1"
           TWILIO_ACCOUNT_SID: !Ref TwilioAccountSID
           TWILIO_AUTH_TOKEN: !Ref TwilioAuthToken
           TWILIO_PHONE_NUMBER: !Ref TwilioPhoneNumber
@@ -60,6 +84,11 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: "Prod"
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
+        AllowOrigin: "'*'"
+        AllowCredentials: "'true'"
       BinaryMediaTypes:
         - image/jpeg
         - image/png
@@ -70,14 +99,16 @@ Resources:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type'"
-              Access-Control-Allow-Methods: "'OPTIONS,GET,POST,PUT,DELETE'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
+              Access-Control-Allow-Methods: "'OPTIONS,GET,POST,PUT,PATCH,DELETE'"
+              Access-Control-Allow-Credentials: "'true'"
         DEFAULT_5XX:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type'"
-              Access-Control-Allow-Methods: "'OPTIONS,GET,POST,PUT,DELETE'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
+              Access-Control-Allow-Methods: "'OPTIONS,GET,POST,PUT,PATCH,DELETE'"
+              Access-Control-Allow-Credentials: "'true'"
 
 Outputs:
   ApiGatewayUrl:

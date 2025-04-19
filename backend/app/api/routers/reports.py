@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, desc
@@ -10,38 +10,88 @@ from app.models.vote import Vote
 from app.schemas.report import ReportCreate, Report as ReportSchema, ReportWithVotes
 from app.schemas.vote import VoteCreate, Vote as VoteSchema
 from app.utils.deps import get_current_user
-from app.utils.s3 import upload_image_to_s3
+from app.utils.s3 import upload_base64_image_to_s3
 from typing import Any, List, Optional
 import json
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 
 router = APIRouter()
 
 
-@router.post("/", response_model=ReportSchema)
+@router.post("/", response_model=ReportSchema, summary="Create a new report with JSON and base64 image",
+    description="""
+    Create a new report using JSON data with a base64-encoded image.
+    
+    The image should be provided as a base64-encoded string in the `base64_image` field,
+    and the image type (extension) should be provided in the `image_type` field (e.g., 'jpg', 'png').
+    """
+)
 async def create_report(
-    title: str = Form(...),
-    description: Optional[str] = Form(None),
-    type: str = Form(ReportType.MISCELLANEOUS),
-    location: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    report: ReportCreate = Body(
+        ...,
+        examples={
+            "with_image": {
+                "summary": "Create report with base64 image",
+                "description": "A normal example with base64 encoded image",
+                "value": {
+                    "title": "Pothole on Main Street",
+                    "description": "Large pothole causing traffic issues",
+                    "type": "INFRASTRUCTURE",
+                    "location": "123 Main St",
+                    "base64_image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAY...",
+                    "image_type": "jpg"
+                }
+            },
+            "without_image": {
+                "summary": "Create report without image",
+                "description": "An example without an image",
+                "value": {
+                    "title": "Noise complaint",
+                    "description": "Loud music after hours",
+                    "type": "NOISE",
+                    "location": "456 Elm St"
+                }
+            }
+        }
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Create a new report.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Upload image to S3 if provided
     image_url = None
-    if image:
-        image_url = await upload_image_to_s3(image)
+    if report.base64_image and report.image_type:
+        logger.info(f"Attempting to upload base64 image with type: {report.image_type}")
+        try:
+            # Validate base64 image string is not empty
+            if not report.base64_image.strip():
+                logger.warning("Base64 image string is empty")
+                raise ValueError("Base64 image string is empty")
+                
+            image_url = await upload_base64_image_to_s3(report.base64_image, report.image_type)
+            logger.info(f"Image uploaded successfully, URL: {image_url}")
+        except Exception as e:
+            # Log the error but continue without image
+            logger.error(f"Failed to upload image: {str(e)}")
+            # Optionally raise an HTTP exception if image upload is required
+            # raise HTTPException(status_code=400, detail=f"Image upload failed: {str(e)}")
+    else:
+        logger.info("No image provided or image type missing")
     
     # Create report
+    logger.info(f"Creating report with title: {report.title}, image_url: {image_url}")
     new_report = Report(
         user_id=current_user.id,
-        title=title,
-        description=description,
-        type=type,
-        location=location,
+        title=report.title,
+        description=report.description,
+        type=report.type,
+        location=report.location,
         image_url=image_url,
         status=ReportStatus.PENDING
     )
@@ -49,6 +99,9 @@ async def create_report(
     db.add(new_report)
     await db.commit()
     await db.refresh(new_report)
+    
+    # Verify the image_url was saved correctly
+    logger.info(f"Report created with ID: {new_report.id}, image_url: {new_report.image_url}")
     
     # Add vote_count to the response
     setattr(new_report, "vote_count", 0)

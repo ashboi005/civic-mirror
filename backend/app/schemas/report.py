@@ -12,7 +12,8 @@ class ReportBase(BaseModel):
 
 
 class ReportCreate(ReportBase):
-    pass
+    base64_image: Optional[str] = None
+    image_type: Optional[str] = None
 
 
 class ReportUpdate(BaseModel):
