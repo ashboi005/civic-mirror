@@ -5,12 +5,15 @@ from sqlalchemy import func, desc
 from app.db.database import get_db
 from app.models.user import User
 from app.models.report import Report, ReportStatus
+from app.schemas.report import ReportStatus
 from app.models.vote import Vote
 from app.models.user_detail import UserDetail
 from app.schemas.report import Report as ReportSchema, ReportWithVotes, ReportStatusUpdate
 from app.utils.deps import get_current_active_superuser
 from app.utils.twilio_service import send_sms
 from typing import Any, List, Optional
+from enum import Enum
+
 
 router = APIRouter()
 
@@ -80,21 +83,56 @@ async def update_report_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ) -> Any:
-    """
-    Update the status of a report (admin only).
-    """
-    # Get the report
     result = await db.execute(select(Report).where(Report.id == report_id))
     report = result.scalar_one_or_none()
     
     if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.status != ReportStatus.pending:  # Note: lowercase
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
+            status_code=400,
+            detail="Can only update reports in pending status"
         )
-    
-    # Update status
+
+    if status_update.status != ReportStatus.in_progress:  # Note: lowercase
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint only allows setting status to in_progress"
+        )
+
     report.status = status_update.status
+    await db.commit()
+    await db.refresh(report)
+    
+    return report
+
+@router.patch("/reports/{report_id}/status", response_model=ReportSchema)
+async def update_report_status(
+    report_id: int,
+    status_update: ReportStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+) -> Any:
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.status != ReportStatus.PENDING.value:  # Use .value for string comparison
+        raise HTTPException(
+            status_code=400,
+            detail="Can only update reports in pending status"
+        )
+
+    if status_update.status != ReportStatus.IN_PROGRESS:
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint only allows setting status to in_progress"
+        )
+
+    report.status = status_update.status.value  # Store the string value
     await db.commit()
     await db.refresh(report)
     
@@ -106,34 +144,31 @@ async def complete_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ) -> Any:
-    """
-    Mark a report as completed (admin only).
-    """
-    # Get the report
     result = await db.execute(select(Report).where(Report.id == report_id))
     report = result.scalar_one_or_none()
     
     if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.status != ReportStatus.IN_PROGRESS.value:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
+            status_code=400,
+            detail="Can only complete reports in in_progress status"
         )
-    
-    # Update status to completed
-    report.status = ReportStatus.COMPLETED
+
+    report.status = ReportStatus.COMPLETED.value
     await db.commit()
     await db.refresh(report)
     
-    # Get user details for notification
+    # Correct user detail lookup
     user_detail_result = await db.execute(
-        select(UserDetail).where(UserDetail.user_id == report.user_id))
+        select(UserDetail).where(UserDetail.user_id == report.user_id)
+    )
     user_detail = user_detail_result.scalar_one_or_none()
     
-    # Send SMS notification if phone number exists
     if user_detail and user_detail.phone_number:
         await send_sms(
-            to_number=user_detail.phone_number,
-            message=f"Your report #{report.id} has been marked as completed. Thank you!"
+            message=f"Your report #{report.id} is now completed. Thank you!"
         )
     
     return report
