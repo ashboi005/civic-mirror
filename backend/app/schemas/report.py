@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from app.models.report import ReportType, ReportStatus
+from enum import Enum
 
 
 class ReportBase(BaseModel):
@@ -48,3 +49,12 @@ class ReportWithVotes(Report):
 
     class Config:
         from_attributes = True 
+
+
+class ReportStatus(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"  # Renamed from ACCEPTED
+    COMPLETED = "completed" # Changed from "COMPLETED"
+
+class ReportStatusUpdate(BaseModel):
+    status: ReportStatus

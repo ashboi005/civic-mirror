@@ -1,65 +1,63 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Filter } from "lucide-react"
+import { Filter, Loader2 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
 import { EmptyState } from "@/components/empty-state"
 import { IssueCard } from "@/components/issue-card"
-
-// Mock data for upvoted issues
-const upvotedIssues = [
-  {
-    id: 4,
-    title: "Water Leakage",
-    description: "Water pipe leaking on sidewalk",
-    category: "Water",
-    status: "Open",
-    location: "789 Pine St",
-    date: "2024-04-13",
-    votes: 15,
-    comments: 2,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 5,
-    title: "Fallen Tree",
-    description: "Tree blocking sidewalk after storm",
-    category: "Environment",
-    status: "In Progress",
-    location: "321 Elm St",
-    date: "2024-04-12",
-    votes: 27,
-    comments: 8,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 6,
-    title: "Graffiti on Public Building",
-    description: "Vandalism on community center wall",
-    category: "Vandalism",
-    status: "Open",
-    location: "555 Community Ave",
-    date: "2024-04-11",
-    votes: 12,
-    comments: 4,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-]
+import { getAllReports, Report } from "@/lib/api"
 
 export default function UpvotesPage() {
-  const [filter, setFilter] = useState<"all" | "open" | "inProgress" | "resolved">("all")
+  const [filter, setFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all")
+  const [upvotedReports, setUpvotedReports] = useState<Report[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredIssues = upvotedIssues.filter((issue) => {
+  useEffect(() => {
+    const fetchUpvotedReports = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        // Fetch all reports and filter ones the user has upvoted
+        const allReports = await getAllReports(0, 50)
+        // Filter reports where the user has upvoted
+        // This is a simplified approach - in a real app, you might want a dedicated API endpoint
+        const upvoted = allReports.filter(report => 
+          report.votes && report.votes.length > 0
+        )
+        setUpvotedReports(upvoted)
+      } catch (err) {
+        console.error("Failed to fetch upvoted reports:", err)
+        setError("Failed to load your upvoted reports. Please try again later.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUpvotedReports()
+  }, [])
+
+  // Handle voting to refresh reports
+  const handleVote = async () => {
+    try {
+      const allReports = await getAllReports(0, 50)
+      const upvoted = allReports.filter(report => 
+        report.votes && report.votes.length > 0
+      )
+      setUpvotedReports(upvoted)
+    } catch (err) {
+      console.error("Failed to refresh reports after voting:", err)
+    }
+  }
+
+  const filteredReports = upvotedReports.filter((report) => {
     if (filter === "all") return true
-    if (filter === "open") return issue.status === "Open"
-    if (filter === "inProgress") return issue.status === "In Progress"
-    if (filter === "resolved") return issue.status === "Resolved"
-    return true
+    return report.status === filter
   })
 
   const container = {
@@ -101,10 +99,10 @@ export default function UpvotesPage() {
                 <TabsTrigger value="all" onClick={() => setFilter("all")}>
                   All
                 </TabsTrigger>
-                <TabsTrigger value="open" onClick={() => setFilter("open")}>
-                  Open
+                <TabsTrigger value="pending" onClick={() => setFilter("pending")}>
+                  Pending
                 </TabsTrigger>
-                <TabsTrigger value="inProgress" onClick={() => setFilter("inProgress")}>
+                <TabsTrigger value="in_progress" onClick={() => setFilter("in_progress")}>
                   In Progress
                 </TabsTrigger>
                 <TabsTrigger value="resolved" onClick={() => setFilter("resolved")}>
@@ -112,11 +110,25 @@ export default function UpvotesPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {filteredIssues.length > 0 ? (
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : error ? (
+                <Card className="border-gray-800 bg-black/40 backdrop-blur-sm">
+                  <CardContent className="p-6">
+                    <EmptyState
+                      title="Error loading upvoted reports"
+                      description={error}
+                      icon="alert-triangle"
+                    />
+                  </CardContent>
+                </Card>
+              ) : filteredReports.length > 0 ? (
                 <motion.div className="grid gap-4 md:grid-cols-2" variants={container} initial="hidden" animate="show">
-                  {filteredIssues.map((issue) => (
-                    <motion.div key={issue.id} variants={item}>
-                      <IssueCard issue={issue} />
+                  {filteredReports.map((report) => (
+                    <motion.div key={report.id} variants={item}>
+                      <IssueCard issue={report} onVote={handleVote} />
                     </motion.div>
                   ))}
                 </motion.div>

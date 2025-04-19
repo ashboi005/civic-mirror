@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,8 @@ import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
 import { CommunityMember } from "@/components/community-member"
 import { CommunityPost } from "@/components/community-post"
+import { getAllReports, Report } from "@/lib/api"
+import { IssueCard } from "@/components/issue-card"
 
 // Mock data for community members
 const communityMembers = [
@@ -110,8 +112,34 @@ const communityPosts = [
 ]
 
 export default function CommunityPage() {
-  const [activeTab, setActiveTab] = useState<"feed" | "members">("feed")
+  const [activeTab, setActiveTab] = useState<"feed" | "members" | "reports">("reports")
   const [searchQuery, setSearchQuery] = useState("")
+  const [reports, setReports] = useState<Report[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchReports = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await getAllReports(0, 20)
+      setReports(data)
+    } catch (err) {
+      console.error("Failed to fetch reports:", err)
+      setError("Failed to load reports. Please try again later.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchReports()
+  }, [])
+
+  const handleVote = () => {
+    // Refresh reports after voting
+    fetchReports()
+  }
 
   const filteredMembers = communityMembers.filter(
     (member) =>
@@ -151,8 +179,11 @@ export default function CommunityPage() {
               </div>
             </div>
 
-            <Tabs defaultValue="feed" className="w-full">
+            <Tabs defaultValue="reports" className="w-full">
               <TabsList className="bg-gray-800/50 mb-6">
+                <TabsTrigger value="reports" onClick={() => setActiveTab("reports")}>
+                  Reports
+                </TabsTrigger>
                 <TabsTrigger value="feed" onClick={() => setActiveTab("feed")}>
                   Community Feed
                 </TabsTrigger>
@@ -176,7 +207,30 @@ export default function CommunityPage() {
                 </div>
               )}
 
-              {activeTab === "feed" ? (
+              {activeTab === "reports" && (
+                <motion.div
+                  className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                  variants={container}
+                  initial="hidden"
+                  animate="show"
+                >
+                  {loading ? (
+                    <p className="text-center col-span-full">Loading reports...</p>
+                  ) : error ? (
+                    <p className="text-center text-red-500 col-span-full">{error}</p>
+                  ) : reports.length === 0 ? (
+                    <p className="text-center col-span-full">No reports found.</p>
+                  ) : (
+                    reports.map((report) => (
+                      <motion.div key={report.id} variants={item}>
+                        <IssueCard issue={report} onVote={handleVote} />
+                      </motion.div>
+                    ))
+                  )}
+                </motion.div>
+              )}
+
+              {activeTab === "feed" && (
                 <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
                   <Card className="border-gray-800 bg-black/40 backdrop-blur-sm">
                     <CardContent className="p-4">
@@ -199,7 +253,9 @@ export default function CommunityPage() {
                     </motion.div>
                   ))}
                 </motion.div>
-              ) : (
+              )}
+
+              {activeTab === "members" && (
                 <motion.div className="grid gap-4 md:grid-cols-2" variants={container} initial="hidden" animate="show">
                   {filteredMembers.map((member) => (
                     <motion.div key={member.id} variants={item}>
