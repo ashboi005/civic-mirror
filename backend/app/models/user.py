@@ -3,6 +3,9 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
+# Valid user roles when is_superuser is True
+VALID_ROLES = ["garbage", "labour", "electrician", "plumber", "all"]
+
 
 class User(Base):
     __tablename__ = "users"
@@ -13,6 +16,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+    role = Column(String, nullable=True)  # Only meaningful if is_superuser is True, valid values are in VALID_ROLES
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

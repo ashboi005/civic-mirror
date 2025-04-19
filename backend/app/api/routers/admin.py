@@ -48,4 +48,4 @@ async def complete_report(
     """
     Mark a report as completed (admin only).
     """
-
+  
