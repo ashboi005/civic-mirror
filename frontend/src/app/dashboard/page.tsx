@@ -1,74 +1,84 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Filter, Plus, ArrowLeft } from "lucide-react"
+import { MapPin, Filter, Plus, ArrowLeft, Loader2 } from "lucide-react"
 import { IssueCard } from "@/components/issue-card"
 import { ReportIssueForm } from "@/components/report-issue-form"
 import { MapView } from "@/components/map-view"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
+import { getAllReports, getUserReports, Report } from "@/lib/api"
+import { EmptyState } from "@/components/empty-state"
+import ProtectedRoute from "@/components/protected-route"
 
-// Mock data for issues
-const mockIssues = [
-  {
-    id: 1,
-    title: "Pothole on Main Street",
-    description: "Large pothole causing traffic issues",
-    category: "Road",
-    status: "Open",
-    location: "123 Main St",
-    date: "2024-04-15",
-    votes: 24,
-    comments: 5,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 2,
-    title: "Broken Street Light",
-    description: "Street light not working for past week",
-    category: "Lighting",
-    status: "In Progress",
-    location: "456 Oak Ave",
-    date: "2024-04-14",
-    votes: 18,
-    comments: 3,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 3,
-    title: "Garbage Overflow",
-    description: "Garbage bins overflowing in park",
-    category: "Sanitation",
-    status: "Resolved",
-    location: "Central Park",
-    date: "2024-04-10",
-    votes: 32,
-    comments: 7,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: 4,
-    title: "Water Leakage",
-    description: "Water pipe leaking on sidewalk",
-    category: "Water",
-    status: "Open",
-    location: "789 Pine St",
-    date: "2024-04-13",
-    votes: 15,
-    comments: 2,
-    image: "/placeholder.svg?height=200&width=300",
-  },
-]
-
-export default function Dashboard() {
+function DashboardContent() {
   const [view, setView] = useState<"list" | "map">("list")
   const [showReportForm, setShowReportForm] = useState(false)
   const [filter, setFilter] = useState<"all" | "mine" | "nearby">("all")
+  const [reports, setReports] = useState<Report[]>([])
+  const [userReports, setUserReports] = useState<Report[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchAllReports = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const allReportsData = await getAllReports(0, 20)
+        setReports(allReportsData)
+
+        // Also fetch user reports for the "mine" filter
+        const userReportsData = await getUserReports(0, 20)
+        setUserReports(userReportsData)
+      } catch (err) {
+        console.error("Failed to fetch reports:", err)
+        setError("Failed to load reports. Please try again later.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAllReports()
+  }, [])
+
+  // Handle voting to refresh reports
+  const handleVote = async () => {
+    try {
+      const allReportsData = await getAllReports(0, 20)
+      setReports(allReportsData)
+      const userReportsData = await getUserReports(0, 20)
+      setUserReports(userReportsData)
+    } catch (err) {
+      console.error("Failed to refresh reports after voting:", err)
+    }
+  }
+
+  // Handle form submission to refresh reports
+  const handleFormSubmit = async () => {
+    setShowReportForm(false)
+    // Refresh reports after submitting a new one
+    try {
+      const allReportsData = await getAllReports(0, 20)
+      setReports(allReportsData)
+      const userReportsData = await getUserReports(0, 20)
+      setUserReports(userReportsData)
+    } catch (err) {
+      console.error("Failed to refresh reports after submission:", err)
+    }
+  }
+
+  // Filter reports based on selected filter
+  const filteredReports = filter === "mine" 
+    ? userReports 
+    : filter === "nearby" 
+      ? reports.slice(0, 5) // Simplified nearby filter - would need geolocation in a real app
+      : reports
 
   const container = {
     hidden: { opacity: 0 },
@@ -120,7 +130,7 @@ export default function Dashboard() {
                     </Button>
                   </CardHeader>
                   <CardContent>
-                    <ReportIssueForm onSubmit={() => setShowReportForm(false)} />
+                    <ReportIssueForm onSubmit={handleFormSubmit} />
                   </CardContent>
                 </Card>
               </motion.div>
@@ -170,23 +180,45 @@ export default function Dashboard() {
                   </Tabs>
                 </div>
 
-                {view === "list" ? (
-                  <motion.div
-                    className="grid gap-4 md:grid-cols-2"
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                  >
-                    {mockIssues.map((issue) => (
-                      <motion.div key={issue.id} variants={item}>
-                        <IssueCard issue={issue} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
+                {loading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : error ? (
+                  <div className="py-8">
+                    <EmptyState
+                      title="Error loading reports"
+                      description={error}
+                      icon="alert-triangle"
+                    />
+                  </div>
+                ) : view === "list" ? (
+                  filteredReports.length > 0 ? (
+                    <motion.div
+                      className="grid gap-4 md:grid-cols-2"
+                      variants={container}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {filteredReports.map((report) => (
+                        <motion.div key={report.id} variants={item}>
+                          <IssueCard issue={report} onVote={handleVote} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <EmptyState
+                      title="No reports found"
+                      description={filter === "mine" 
+                        ? "You haven't reported any issues yet." 
+                        : "No reports available at the moment."}
+                      icon="file-text"
+                    />
+                  )
                 ) : (
                   <Card className="border-gray-800 bg-black/40 backdrop-blur-sm overflow-hidden">
                     <CardContent className="p-0">
-                      <MapView issues={mockIssues} />
+                      <MapView issues={filteredReports} />
                     </CardContent>
                   </Card>
                 )}
@@ -196,5 +228,13 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function Dashboard() {
+  return (
+    <ProtectedRoute fallbackPath="/login">
+      <DashboardContent />
+    </ProtectedRoute>
   )
 }

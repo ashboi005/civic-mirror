@@ -1,16 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle } from "lucide-react"
+import { CheckCircle, Loader2 } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
 import { EmptyState } from "@/components/empty-state"
 import { NotificationItem } from "@/components/notification-item"
+import { getAllReports, getUserReports, Report } from "@/lib/api"
 
 // Define the Notification type to match the NotificationItem component requirements
 type Notification = {
@@ -23,58 +24,99 @@ type Notification = {
   relatedId: number
 }
 
-// Mock data for notifications
-const mockNotifications: Notification[] = [
-  {
-    id: 1,
-    title: "Issue Status Updated",
-    description: "Your report 'Pothole on Main Street' has been updated to 'In Progress'",
-    date: "2024-04-18T10:30:00",
-    read: false,
-    type: "status",
-    relatedId: 1,
-  },
-  {
-    id: 2,
-    title: "New Comment",
-    description: "John Doe commented on your report 'Broken Street Light'",
-    date: "2024-04-17T14:45:00",
-    read: false,
-    type: "comment",
-    relatedId: 2,
-  },
-  {
-    id: 3,
-    title: "Issue Resolved",
-    description: "Your report 'Garbage Overflow' has been marked as resolved",
-    date: "2024-04-16T09:15:00",
-    read: true,
-    type: "status",
-    relatedId: 3,
-  },
-  {
-    id: 4,
-    title: "Upvote Received",
-    description: "Your report 'Pothole on Main Street' received 5 new upvotes",
-    date: "2024-04-15T16:20:00",
-    read: true,
-    type: "upvote",
-    relatedId: 1,
-  },
-  {
-    id: 5,
-    title: "New Nearby Issue",
-    description: "A new issue 'Fallen Tree' was reported near your location",
-    date: "2024-04-14T11:05:00",
-    read: true,
-    type: "nearby",
-    relatedId: 5,
-  },
-]
-
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<"all" | "unread" | "read">("all")
-  const [notifications, setNotifications] = useState(mockNotifications)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Fetch reports and simulate notifications based on them
+    const fetchReportsAndGenerateNotifications = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        // Fetch both all reports and user reports
+        const [allReports, userReports] = await Promise.all([
+          getAllReports(0, 20),
+          getUserReports(0, 20)
+        ])
+        
+        // Generate simulated notifications based on reports
+        const simulatedNotifications: Notification[] = []
+        
+        // Add status notifications for user reports
+        userReports.forEach((report, index) => {
+          if (report.status === "in_progress") {
+            simulatedNotifications.push({
+              id: simulatedNotifications.length + 1,
+              title: "Issue Status Updated",
+              description: `Your report '${report.title}' has been updated to 'In Progress'`,
+              date: report.updated_at || new Date().toISOString(),
+              read: index > 1, // First two are unread
+              type: "status",
+              relatedId: report.id || 0
+            })
+          } else if (report.status === "resolved") {
+            simulatedNotifications.push({
+              id: simulatedNotifications.length + 1,
+              title: "Issue Resolved",
+              description: `Your report '${report.title}' has been marked as resolved`,
+              date: report.updated_at || new Date().toISOString(),
+              read: index > 1, // First two are unread
+              type: "status",
+              relatedId: report.id || 0
+            })
+          }
+        })
+        
+        // Add upvote notifications
+        userReports.forEach((report, index) => {
+          if ((report.vote_count || 0) > 0) {
+            simulatedNotifications.push({
+              id: simulatedNotifications.length + 1,
+              title: "Upvote Received",
+              description: `Your report '${report.title}' received ${report.vote_count} upvote${report.vote_count !== 1 ? 's' : ''}`,
+              date: new Date(Date.now() - index * 86400000).toISOString(), // Random dates
+              read: index > 2, // First three are unread
+              type: "upvote",
+              relatedId: report.id || 0
+            })
+          }
+        })
+        
+        // Add nearby issue notifications
+        allReports
+          .filter(r => !userReports.some(ur => ur.id === r.id)) // Only non-user reports
+          .slice(0, 3)
+          .forEach((report, index) => {
+            simulatedNotifications.push({
+              id: simulatedNotifications.length + 1,
+              title: "New Nearby Issue",
+              description: `A new issue '${report.title}' was reported near your location`,
+              date: report.created_at || new Date().toISOString(),
+              read: index > 0, // First one is unread
+              type: "nearby",
+              relatedId: report.id || 0
+            })
+          })
+        
+        // Sort by date, newest first
+        simulatedNotifications.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+        
+        setNotifications(simulatedNotifications)
+      } catch (err) {
+        console.error("Failed to fetch reports for notifications:", err)
+        setError("Failed to load notifications. Please try again later.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchReportsAndGenerateNotifications()
+  }, [])
 
   const filteredNotifications = notifications.filter((notification) => {
     if (filter === "all") return true
@@ -167,7 +209,19 @@ export default function NotificationsPage() {
               </div>
 
               <Card className="border-gray-800 bg-black/40 backdrop-blur-sm mt-6">
-                {filteredNotifications.length > 0 ? (
+                {loading ? (
+                  <CardContent className="flex justify-center items-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </CardContent>
+                ) : error ? (
+                  <CardContent className="p-6">
+                    <EmptyState
+                      title="Error loading notifications"
+                      description={error}
+                      icon="alert-triangle"
+                    />
+                  </CardContent>
+                ) : filteredNotifications.length > 0 ? (
                   <motion.div className="divide-y divide-gray-800" variants={container} initial="hidden" animate="show">
                     {filteredNotifications.map((notification) => (
                       <motion.div key={notification.id} variants={item}>
