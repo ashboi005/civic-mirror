@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app, includes prod setup for AWS Lambda
 app = FastAPI(
-    title="Fast API Boilerplate",
+    title="Civic Mirror",
     description="Backend API",
     version="0.1.0",
     root_path="" if ENVIRONMENT == "development" else "/Prod",

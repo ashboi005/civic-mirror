@@ -10,7 +10,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 API_V1_STR = "/api/v1"
-PROJECT_NAME = "YOUR_PROJECT_NAME"
+PROJECT_NAME = "Civic Mirror"
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
