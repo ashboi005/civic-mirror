@@ -32,4 +32,5 @@ class Report(Base):
     
     # Relationships
     user = relationship("User", back_populates="reports")
-    votes = relationship("Vote", back_populates="report", cascade="all, delete-orphan") 
+    votes = relationship("Vote", back_populates="report", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="report", cascade="all, delete-orphan") 

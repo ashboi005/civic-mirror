@@ -19,4 +19,5 @@ class User(Base):
     # Relationships
     details = relationship("UserDetail", back_populates="user", uselist=False, cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="user", cascade="all, delete-orphan")
-    votes = relationship("Vote", back_populates="user", cascade="all, delete-orphan") 
+    votes = relationship("Vote", back_populates="user", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan") 

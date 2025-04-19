@@ -23,7 +23,7 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",  
     servers=[
-        {"url": "Enter your prod url here", "description": "Production Server"},
+        {"url": "https://855amc8i0k.execute-api.ap-south-1.amazonaws.com/Prod/", "description": "Production Server"},
         {"url": "http://localhost:8000", "description": "Local Development Server"},
     ],
 )
@@ -93,7 +93,7 @@ app.include_router(api_router)
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to YOUR_PROJECT_NAME API"}
+    return {"message": "Welcome to Civic Mirror API"}
 
 @app.get("/health")
 async def health_check():
