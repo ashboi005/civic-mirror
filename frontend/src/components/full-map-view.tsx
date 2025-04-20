@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { MapPin } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { MapPin, Navigation } from "lucide-react"
 import { Report } from "@/lib/api"
 
 // Enhanced report type with coordinates for map display
@@ -14,6 +14,18 @@ export interface MapReport extends Report {
   date?: string;
   comments?: number;
   image?: string;
+  // Add these properties for the component to use
+  position?: {
+    left: number;
+    top: number;
+  };
+  distance?: number | null;
+}
+
+// Coordinates interface
+interface Coordinates {
+  lat: number;
+  lng: number;
 }
 
 interface FullMapViewProps {
@@ -21,28 +33,40 @@ interface FullMapViewProps {
   onSelectIssue: (issue: MapReport) => void;
   selectedIssueId?: number;
   onVote?: () => void;
+  userLocation?: Coordinates | null;
 }
 
-export function FullMapView({ issues, onSelectIssue, selectedIssueId, onVote }: FullMapViewProps) {
+export function FullMapView({ issues, onSelectIssue, selectedIssueId, onVote, userLocation }: FullMapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null)
+  const [mapCenterLat, setMapCenterLat] = useState(40.7128) // Default to NYC
+  const [mapCenterLng, setMapCenterLng] = useState(-74.006)
+
+  useEffect(() => {
+    // If user location exists, update the map center
+    if (userLocation) {
+      setMapCenterLat(userLocation.lat);
+      setMapCenterLng(userLocation.lng);
+    }
+  }, [userLocation]);
 
   useEffect(() => {
     if (!mapRef.current) return
 
     const mapElement = mapRef.current
 
-    // Create a mock map with a grid
-    const ctx = document.createElement("canvas").getContext("2d")
+    // Create a canvas for the map background
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    const canvas = ctx.canvas
-    canvas.width = mapElement.clientWidth
-    canvas.height = mapElement.clientHeight
+    canvas.width = mapElement.clientWidth || 800
+    canvas.height = mapElement.clientHeight || 600
 
-    // Draw grid
+    // Draw map background
     ctx.fillStyle = "#111111"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
+    // Draw grid
     ctx.strokeStyle = "#222222"
     ctx.lineWidth = 1
 
@@ -62,119 +86,224 @@ export function FullMapView({ issues, onSelectIssue, selectedIssueId, onVote }: 
       ctx.stroke()
     }
 
-    // Draw some roads
+    // Draw main roads
     ctx.strokeStyle = "#333333"
-    ctx.lineWidth = 8
+    ctx.lineWidth = 4
 
-    // Horizontal main road
-    ctx.beginPath()
-    ctx.moveTo(0, canvas.height / 2)
-    ctx.lineTo(canvas.width, canvas.height / 2)
-    ctx.stroke()
+    // Horizontal main roads
+    for (let y = gridSize * 2; y < canvas.height; y += gridSize * 4) {
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(canvas.width, y)
+      ctx.stroke()
+    }
 
-    // Vertical main road
-    ctx.beginPath()
-    ctx.moveTo(canvas.width / 2, 0)
-    ctx.lineTo(canvas.width / 2, canvas.height)
-    ctx.stroke()
+    // Vertical main roads
+    for (let x = gridSize * 2; x < canvas.width; x += gridSize * 4) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, canvas.height)
+      ctx.stroke()
+    }
 
-    // Some diagonal roads
-    ctx.beginPath()
-    ctx.moveTo(0, 0)
-    ctx.lineTo(canvas.width / 3, canvas.height / 3)
-    ctx.stroke()
+    // Secondary roads
+    ctx.strokeStyle = "#2a2a2a";
+    ctx.lineWidth = 2;
 
-    ctx.beginPath()
-    ctx.moveTo(canvas.width, 0)
-    ctx.lineTo((canvas.width * 2) / 3, canvas.height / 3)
-    ctx.stroke()
+    // Draw some intersecting roads
+    for (let i = 1; i < 4; i++) {
+      // Diagonal roads
+      ctx.beginPath()
+      ctx.moveTo(canvas.width * (i/4), 0)
+      ctx.lineTo(canvas.width, canvas.height * (i/4))
+      ctx.stroke()
+      
+      ctx.beginPath()
+      ctx.moveTo(0, canvas.height * (i/4))
+      ctx.lineTo(canvas.width * (i/4), canvas.height)
+      ctx.stroke()
+    }
 
-    // Add a blue dot for current location
-    ctx.fillStyle = "#3b82f6"
-    ctx.beginPath()
-    ctx.arc(canvas.width / 2, canvas.height / 2, 8, 0, Math.PI * 2)
-    ctx.fill()
+    // Draw city blocks
+    for (let x = gridSize * 4; x < canvas.width; x += gridSize * 8) {
+      for (let y = gridSize * 4; y < canvas.height; y += gridSize * 8) {
+        ctx.fillStyle = "#1a1a1a"
+        ctx.fillRect(x, y, gridSize * 2, gridSize * 2)
+      }
+    }
 
-    ctx.strokeStyle = "#3b82f6"
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.arc(canvas.width / 2, canvas.height / 2, 12, 0, Math.PI * 2)
-    ctx.stroke()
+    // Add a blue dot for current location (only if we have a real user location)
+    if (userLocation) {
+      // Draw pulsing effect
+      ctx.fillStyle = "rgba(59, 130, 246, 0.2)" // Semi-transparent blue
+      ctx.beginPath()
+      ctx.arc(canvas.width / 2, canvas.height / 2, 24, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Draw blue dot
+      ctx.fillStyle = "#3b82f6"
+      ctx.beginPath()
+      ctx.arc(canvas.width / 2, canvas.height / 2, 10, 0, Math.PI * 2)
+      ctx.fill()
+
+      ctx.strokeStyle = "#3b82f6"
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.arc(canvas.width / 2, canvas.height / 2, 16, 0, Math.PI * 2)
+      ctx.stroke()
+    }
 
     // Set the canvas as the background
-    mapElement.style.backgroundImage = `url(${canvas.toDataURL()})`
+    const dataUrl = canvas.toDataURL()
+    mapElement.style.backgroundImage = `url(${dataUrl})`
     mapElement.style.backgroundSize = "cover"
     mapElement.style.backgroundPosition = "center"
 
     return () => {
       mapElement.style.backgroundImage = ""
     }
-  }, [])
+  }, [mapRef, userLocation, mapCenterLat, mapCenterLng])
 
   const getMarkerColor = (status: string | undefined) => {
     switch (status) {
       case "pending":
-        return "text-yellow-500 bg-yellow-500/20"
+        return "text-amber-500 bg-amber-500/20 border border-amber-500/40"
       case "in_progress":
-        return "text-blue-500 bg-blue-500/20"
+        return "text-blue-500 bg-blue-500/20 border border-blue-500/40"
       case "resolved":
-        return "text-green-500 bg-green-500/20"
+        return "text-green-500 bg-green-500/20 border border-green-500/40"
       default:
-        return "text-yellow-500 bg-yellow-500/20" // Default to pending
+        return "text-amber-500 bg-amber-500/20 border border-amber-500/40" // Default to pending
     }
   }
 
-  // Generate map positions for issues
-  const issuesWithPositions = issues.map((issue, index) => {
-    // We're using the coordinates from the MapReport
-    const { lat, lng } = issue.coordinates;
+  // Calculate distance between user and issue
+  const calculateDistance = (issueCoords: Coordinates): number | null => {
+    if (!userLocation) return null;
     
-    // Scale coordinates to viewport percentages
-    // This is just a simple example, real maps would use proper projections
-    const left = ((lng + 74.006) * 1000) % 80 + 10; // Just a formula to spread things across the map
-    const top = ((lat - 40.7128) * 1000) % 400 + 50;
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (issueCoords.lat - userLocation.lat) * Math.PI / 180;
+    const dLon = (issueCoords.lng - userLocation.lng) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(userLocation.lat * Math.PI / 180) * Math.cos(issueCoords.lat * Math.PI / 180) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Position issues evenly across the map
+  const issuesWithPositions = issues.map((issue, index) => {
+    // Create a more predictable distribution of markers across the map
+    // Rather than using the actual coordinates which may not display well
+    const totalIssues = issues.length;
+    const columns = Math.ceil(Math.sqrt(totalIssues));
+    const rows = Math.ceil(totalIssues / columns);
+    
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    
+    // Position markers in a grid pattern
+    const left = 20 + (col * 60 / columns); 
+    const top = 50 + (row * 400 / rows);
+    
+    // Calculate distance from user if available
+    const distance = calculateDistance(issue.coordinates);
     
     return {
       ...issue,
-      position: { left, top }
+      position: { left, top },
+      distance
     };
   });
 
+  // Group markers by position to avoid overlap
+  const groupedMarkers: Record<string, MapReport[]> = {};
+  
+  issuesWithPositions.forEach(issue => {
+    const posKey = `${Math.round(issue.position.left)}-${Math.round(issue.position.top)}`;
+    if (!groupedMarkers[posKey]) {
+      groupedMarkers[posKey] = [];
+    }
+    groupedMarkers[posKey].push(issue);
+  });
+
   return (
-    <div className="relative h-full w-full" ref={mapRef}>
+    <div className="relative h-full w-full overflow-hidden" ref={mapRef}>
       {/* Issue markers */}
-      {issuesWithPositions.map((issue) => {
+      {Object.entries(groupedMarkers).map(([posKey, issues]) => {
+        const issue = issues[0]; // Use the first issue for positioning
+        const isMultiple = issues.length > 1;
+        
         return (
           <div
-            key={issue.id}
+            key={posKey}
             className={`absolute flex flex-col items-center group cursor-pointer transition-transform duration-200 ${
-              selectedIssueId === issue.id ? "scale-125 z-10" : "hover:scale-110"
+              issues.some(i => i.id === selectedIssueId) ? "scale-125 z-10" : "hover:scale-110"
             }`}
-            style={{ left: `${issue.position.left}%`, top: `${issue.position.top}px` }}
-            onClick={() => onSelectIssue(issue)}
+            style={{ 
+              left: `${issue.position?.left ?? 0}%`, 
+              top: `${issue.position?.top ?? 0}px` 
+            }}
           >
-            <div
+            <div 
               className={`p-2 rounded-full ${getMarkerColor(issue.status)} shadow-lg ${
-                selectedIssueId === issue.id ? "ring-2 ring-white" : ""
-              }`}
+                issues.some(i => i.id === selectedIssueId) ? "ring-2 ring-white" : ""
+              } ${isMultiple ? "border-2" : ""}`}
+              onClick={() => onSelectIssue(issue)}
             >
-              <MapPin className="h-6 w-6" />
+              {isMultiple ? (
+                <div className="relative">
+                  <MapPin className="h-6 w-6" />
+                  <div className="absolute -top-1 -right-1 bg-gray-900 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                    {issues.length}
+                  </div>
+                </div>
+              ) : (
+                <MapPin className="h-6 w-6" />
+              )}
             </div>
-            <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-              <div className="bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs max-w-[200px]">
-                <p className="font-semibold">{issue.title}</p>
-                <p className="text-gray-400 text-xs mt-1">{issue.location || 'Unknown location'}</p>
+            <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30">
+              <div className="bg-black/90 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs max-w-[200px]">
+                {isMultiple ? (
+                  <>
+                    <p className="font-semibold">{issues.length} Issues at this location</p>
+                    <ul className="mt-1 space-y-1">
+                      {issues.slice(0, 3).map(i => (
+                        <li key={i.id} className="text-gray-300 text-xs">{i.title}</li>
+                      ))}
+                      {issues.length > 3 && <li className="text-gray-400 text-xs">...and {issues.length - 3} more</li>}
+                    </ul>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold">{issue.title}</p>
+                    <p className="text-gray-400 text-xs mt-1">{issue.location || 'Unknown location'}</p>
+                  </>
+                )}
+                
+                {issue.distance !== null && issue.distance !== undefined && (
+                  <p className="text-blue-400 text-xs mt-1">
+                    {issue.distance.toFixed(1)}km away
+                  </p>
+                )}
               </div>
             </div>
           </div>
-        )
+        );
       })}
 
-      {/* Current location indicator */}
-      <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs flex items-center gap-2">
-        <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-        <span>Your Location</span>
-      </div>
+      {/* User location indicator */}
+      {userLocation && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
+          <div className="relative">
+            <div className="absolute -inset-4 bg-blue-500 rounded-full opacity-20 animate-ping"></div>
+            <div className="relative bg-blue-500 p-2 rounded-full shadow-lg">
+              <Navigation className="h-4 w-4 text-white" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

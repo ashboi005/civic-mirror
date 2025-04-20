@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Layers, ZoomIn, ZoomOut, MapPin } from "lucide-react"
+import { Layers, ZoomIn, ZoomOut, MapPin, Loader2, Navigation } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
@@ -35,6 +35,12 @@ interface Vote {
   created_at?: string;
 }
 
+// Define coordinates interface
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
 // Mock data for issues
 const allIssues: MapReport[] = [
   {
@@ -47,7 +53,7 @@ const allIssues: MapReport[] = [
     location: "123 Main St",
     date: "2024-04-15",
     vote_count: 24,
-    votes: [{ report_id: 1, id: 1, user_id: 1 }], // Converted to array of Vote objects
+    votes: [{ report_id: 1, id: 1, user_id: 1 }],
     comments: 5,
     image: "/placeholder.svg?height=200&width=300",
     coordinates: { lat: 40.7128, lng: -74.006 },
@@ -62,7 +68,7 @@ const allIssues: MapReport[] = [
     location: "456 Oak Ave",
     date: "2024-04-14",
     vote_count: 18,
-    votes: [{ report_id: 2, id: 2, user_id: 1 }], // Converted to array of Vote objects
+    votes: [{ report_id: 2, id: 2, user_id: 1 }],
     comments: 3,
     image: "/placeholder.svg?height=200&width=300",
     coordinates: { lat: 40.7148, lng: -74.008 },
@@ -77,7 +83,7 @@ const allIssues: MapReport[] = [
     location: "Central Park",
     date: "2024-04-10",
     vote_count: 32,
-    votes: [{ report_id: 3, id: 3, user_id: 1 }], // Converted to array of Vote objects
+    votes: [{ report_id: 3, id: 3, user_id: 1 }],
     comments: 7,
     image: "/placeholder.svg?height=200&width=300",
     coordinates: { lat: 40.7168, lng: -74.003 },
@@ -92,7 +98,7 @@ const allIssues: MapReport[] = [
     location: "789 Pine St",
     date: "2024-04-13",
     vote_count: 15,
-    votes: [{ report_id: 4, id: 4, user_id: 1 }], // Converted to array of Vote objects
+    votes: [{ report_id: 4, id: 4, user_id: 1 }],
     comments: 2,
     image: "/placeholder.svg?height=200&width=300",
     coordinates: { lat: 40.7138, lng: -74.002 },
@@ -107,7 +113,7 @@ const allIssues: MapReport[] = [
     location: "321 Elm St",
     date: "2024-04-12",
     vote_count: 27,
-    votes: [{ report_id: 5, id: 5, user_id: 1 }], // Converted to array of Vote objects
+    votes: [{ report_id: 5, id: 5, user_id: 1 }],
     comments: 8,
     image: "/placeholder.svg?height=200&width=300",
     coordinates: { lat: 40.7158, lng: -74.005 },
@@ -115,8 +121,55 @@ const allIssues: MapReport[] = [
 ]
 
 export default function MapPage() {
-  const [filter, setFilter] = useState<"all" | "open" | "inProgress" | "resolved">("all")
+  const [filter, setFilter] = useState<"all" | "open" | "inProgress" | "resolved" | "nearby">("all")
   const [selectedIssue, setSelectedIssue] = useState<MapReport | null>(null)
+  const [userLocation, setUserLocation] = useState<Coordinates | null>(null)
+  const [isLocating, setIsLocating] = useState<boolean>(false)
+  const [proximityRadius, setProximityRadius] = useState<number>(5) // in kilometers
+  
+  // Get user's current location on component mount
+  useEffect(() => {
+    const getUserLocation = () => {
+      setIsLocating(true);
+      
+      if (!navigator.geolocation) {
+        console.error("Geolocation is not supported by your browser");
+        setIsLocating(false);
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userCoords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(userCoords);
+          setIsLocating(false);
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: true }
+      );
+    };
+    
+    getUserLocation();
+  }, []);
+  
+  // Calculate distance between two coordinates in kilometers (using Haversine formula)
+  const calculateDistance = (coords1: Coordinates, coords2: Coordinates): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (coords2.lat - coords1.lat) * Math.PI / 180;
+    const dLon = (coords2.lng - coords1.lng) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(coords1.lat * Math.PI / 180) * Math.cos(coords2.lat * Math.PI / 180) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
   // Fix the onSelectIssue prop type issue by creating a wrapper function
   const handleSelectIssue = (issue: MapReport) => {
@@ -126,29 +179,60 @@ export default function MapPage() {
   // Create a function to convert MapReport to Issue for IssueDetailPanel
   const mapReportToIssue = (report: MapReport): Issue => {
     return {
-      id: report.id ?? 0, // Provide fallback for potentially undefined id
+      id: report.id ?? 0, 
       title: report.title ?? "",
       description: report.description ?? "",
-      category: report.category,
+      category: report.category ?? "Other", // Add fallback
       status: report.status === "pending" ? "Open" : 
               report.status === "in_progress" ? "In Progress" : 
               report.status === "resolved" ? "Resolved" : 
               report.status ?? "Open",
       location: report.location ?? "",
-      date: report.date,
-      votes: report.vote_count ?? 0, // Provide fallback for potentially undefined vote_count
-      comments: report.comments,
-      image: report.image
+      date: report.date ?? new Date().toISOString().split('T')[0], // Add fallback for date
+      votes: report.vote_count ?? 0,
+      comments: report.comments ?? 0, // Add fallback for comments
+      image: report.image ?? "/placeholder.svg?height=200&width=300" // Add fallback for image
     };
   };
 
+  // Filter issues based on selected filter and proximity
   const filteredIssues = allIssues.filter((issue) => {
-    if (filter === "all") return true
-    if (filter === "open") return issue.status === "pending"
-    if (filter === "inProgress") return issue.status === "in_progress"
-    if (filter === "resolved") return issue.status === "resolved"
-    return true
-  })
+    // First apply status filter
+    if (filter === "all") return true;
+    if (filter === "open") return issue.status === "pending";
+    if (filter === "inProgress") return issue.status === "in_progress";
+    if (filter === "resolved") return issue.status === "resolved";
+    
+    // If "nearby" filter is selected, only show issues near user location
+    if (filter === "nearby") {
+      if (!userLocation) return false;
+      const distance = calculateDistance(userLocation, issue.coordinates);
+      return distance <= proximityRadius; // Show issues within proximity radius
+    }
+    
+    return true;
+  });
+
+  // Refresh user location
+  const refreshLocation = () => {
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setIsLocating(false);
+        // If nearby filter is active, automatically switch to it
+        setFilter("nearby");
+      },
+      (error) => {
+        console.error("Error refreshing location:", error);
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/90">
@@ -164,6 +248,22 @@ export default function MapPage() {
                 <h2 className="text-2xl font-bold tracking-tight">Explore Map</h2>
                 <p className="text-muted-foreground">View all reported issues on an interactive map</p>
               </div>
+              
+              {/* Add location refresh button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+                onClick={refreshLocation}
+                disabled={isLocating}
+              >
+                {isLocating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Navigation className="h-4 w-4" />
+                )}
+                {isLocating ? "Locating..." : "Find Nearby Issues"}
+              </Button>
             </div>
 
             <div className="flex items-center justify-between">
@@ -181,6 +281,14 @@ export default function MapPage() {
                   <TabsTrigger value="resolved" onClick={() => setFilter("resolved")}>
                     Resolved
                   </TabsTrigger>
+                  <TabsTrigger 
+                    value="nearby" 
+                    onClick={() => setFilter("nearby")}
+                    disabled={!userLocation}
+                    className={!userLocation ? "opacity-50 cursor-not-allowed" : ""}
+                  >
+                    Nearby
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -193,6 +301,7 @@ export default function MapPage() {
                       issues={filteredIssues}
                       onSelectIssue={handleSelectIssue}
                       selectedIssueId={selectedIssue?.id}
+                      userLocation={userLocation}
                     />
                     <div className="absolute top-4 right-4 flex flex-col gap-2">
                       <Button
@@ -217,10 +326,15 @@ export default function MapPage() {
                         <Layers className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                      <span>Your Location</span>
-                    </div>
+                    {userLocation && (
+                      <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+                        <span>Your Location</span>
+                        {filter === "nearby" && (
+                          <span className="ml-1 text-gray-400">({proximityRadius}km radius)</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -274,6 +388,30 @@ export default function MapPage() {
                       </div>
                     </CardContent>
                   </Card>
+                  
+                  {userLocation && filter === "nearby" && (
+                    <Card className="border-gray-800 bg-black/40 backdrop-blur-sm">
+                      <CardContent className="p-4">
+                        <h3 className="text-sm font-medium mb-2">Proximity Settings</h3>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-xs text-gray-400">Search Radius: {proximityRadius}km</label>
+                            <input 
+                              type="range" 
+                              min="1" 
+                              max="20" 
+                              value={proximityRadius}
+                              onChange={(e) => setProximityRadius(parseInt(e.target.value))}
+                              className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Showing {filteredIssues.length} issues within {proximityRadius}km
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </motion.div>
               )}
             </div>
