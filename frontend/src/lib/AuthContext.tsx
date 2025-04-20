@@ -1,8 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { isAuthenticated, getCurrentUser, logout } from './auth';
-import type { User } from './auth';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { isAuthenticated, getCurrentUser, logout, User } from './auth';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -14,20 +14,25 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
   
   const refreshUser = async () => {
     if (isAuthenticated()) {
       try {
         const userData = await getCurrentUser();
-        setUser(userData);
-        setIsLoggedIn(true);
+        if (userData) {
+          setUser(userData);
+          setIsLoggedIn(true);
+        } else {
+          handleLogout();
+        }
       } catch (error) {
-        setUser(null);
-        setIsLoggedIn(false);
+        console.error('Error refreshing user:', error);
+        handleLogout();
       }
     } else {
       setUser(null);
@@ -37,9 +42,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   useEffect(() => {
     const initAuth = async () => {
-      setLoading(true);
-      await refreshUser();
-      setLoading(false);
+      try {
+        setLoading(true);
+        await refreshUser();
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        setUser(null);
+        setIsLoggedIn(false);
+      } finally {
+        setLoading(false);
+      }
     };
     
     initAuth();
@@ -49,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout();
     setUser(null);
     setIsLoggedIn(false);
+    router.push('/login');
   };
   
   return (

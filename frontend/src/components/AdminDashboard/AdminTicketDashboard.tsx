@@ -1,4 +1,5 @@
 "use client"
+import { getAdminReports, updateReportStatus } from "@/lib/api"
 import { useState, useEffect } from "react"
 import { DashboardStats } from "./AdminDashboardStats"
 import { TicketSort } from "./AdminTicketSort"
@@ -21,22 +22,20 @@ export function TicketDashboard({}: TicketDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-
   // Fetch tickets from the backend
-  useEffect(() => {
+   // Fetch tickets from the backend using getAdminReports
+   useEffect(() => {
     const fetchReports = async () => {
       try {
         console.log("Fetching tickets from backend...")
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/reports`)
-        
-        console.log("Response received:", response.data) 
+        const response = await getAdminReports(0, 10)  // Fetch with default skip and limit
+        console.log("Response received:", response)
 
-       
-        if (Array.isArray(response.data)) {
-          setTickets(response.data)  // Store the reports data
+        if (Array.isArray(response)) {
+          setTickets(response)  // Store the reports data
         } else {
           setError("Invalid data format received from backend.")
-          console.error("Invalid data format:", response.data)
+          console.error("Invalid data format:", response)
         }
       } catch (error) {
         setError('Failed to fetch reports.')
@@ -48,7 +47,6 @@ export function TicketDashboard({}: TicketDashboardProps) {
 
     fetchReports()
   }, [])
-
   // Handle ticket filtering and sorting
   const filteredTickets = tickets
     .filter((ticket) => {
@@ -73,15 +71,20 @@ export function TicketDashboard({}: TicketDashboardProps) {
     })
 
   // Handle ticket status update
-  const handleStatusUpdate = (ticketId: number, newStatus: string) => {
-    setTickets(tickets.map((ticket) => (ticket.id === ticketId ? { ...ticket, status: newStatus } : ticket)))
-    setIsDetailOpen(false)
+  const handleStatusUpdate = async (ticketId: number, newStatus: string) => {
+    try {
+      const updatedReport = await updateReportStatus(ticketId, newStatus);
+      setTickets(tickets.map((ticket) => 
+        ticket.id === ticketId ? { ...ticket, status: newStatus } : ticket
+      ));
+      setIsDetailOpen(false);  // Close the detail modal after update
+    } catch (error) {
+      setError('Failed to update status.')
+      console.error('Error updating status:', error)
+    }
   }
 
-  // Handle upvote
-  const handleUpvote = (ticketId: number) => {
-    setTickets(tickets.map((ticket) => (ticket.id === ticketId ? { ...ticket, vote_count: ticket.vote_count + 1 } : ticket)))
-  }
+
 
   // Toggle sort order
   const toggleSortOrder = () => {
@@ -109,7 +112,7 @@ export function TicketDashboard({}: TicketDashboardProps) {
         </div>
         <TabsContainer
           filteredTickets={filteredTickets}
-          handleUpvote={handleUpvote}
+        
           setSelectedTicket={setSelectedTicket}
           setIsDetailOpen={setIsDetailOpen}
         />

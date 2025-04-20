@@ -35,6 +35,9 @@ const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const TOKEN_TYPE_KEY = 'token_type';
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
 // Authentication functions
 export const login = async (username: string, password: string): Promise<AuthTokens> => {
   const formData = new URLSearchParams();
@@ -57,9 +60,11 @@ export const login = async (username: string, password: string): Promise<AuthTok
     const tokens: AuthTokens = response.data;
     
     // Store tokens in localStorage
-    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
-    localStorage.setItem(TOKEN_TYPE_KEY, tokens.token_type);
+    if (isBrowser) {
+      localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+      localStorage.setItem(TOKEN_TYPE_KEY, tokens.token_type);
+    }
     
     return tokens;
   } catch (error) {
@@ -79,14 +84,29 @@ export const register = async (userData: UserRegisterData): Promise<User> => {
 };
 
 export const refreshToken = async (): Promise<AuthTokens> => {
+  if (!isBrowser) {
+    throw new Error('Cannot refresh token in non-browser environment');
+  }
+  
   const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
   
   if (!refreshToken) {
+    // Instead of immediately throwing, clear any stale tokens and redirect to auth flow
+    logout();
     throw new Error('No refresh token available');
   }
   
   try {
-    const response = await api.post('/auth/refresh', { token: refreshToken });
+    const response = await axios.post(
+      `${api.defaults.baseURL}/auth/refresh`, 
+      { token: refreshToken },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    
     const tokens: AuthTokens = response.data;
     
     // Update tokens in localStorage
@@ -103,22 +123,35 @@ export const refreshToken = async (): Promise<AuthTokens> => {
 };
 
 export const getCurrentUser = async (): Promise<User | null> => {
+  if (!isAuthenticated()) {
+    return null;
+  }
+  
   try {
     const response = await api.get('/auth/me');
     return response.data;
   } catch (error) {
     console.error('Failed to get current user:', error);
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      logout(); // Clear tokens on auth failure
+    }
     return null;
   }
 };
 
 export const logout = (): void => {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(TOKEN_TYPE_KEY);
+  if (isBrowser) {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(TOKEN_TYPE_KEY);
+  }
 };
 
 export const getAuthHeader = (): { Authorization: string } | undefined => {
+  if (!isBrowser) {
+    return undefined;
+  }
+  
   const token = localStorage.getItem(ACCESS_TOKEN_KEY);
   const tokenType = localStorage.getItem(TOKEN_TYPE_KEY) || 'Bearer';
   
@@ -130,6 +163,9 @@ export const getAuthHeader = (): { Authorization: string } | undefined => {
 };
 
 export const isAuthenticated = (): boolean => {
+  if (!isBrowser) {
+    return false;
+  }
   return !!localStorage.getItem(ACCESS_TOKEN_KEY);
 };
 
@@ -144,6 +180,11 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       
       try {
+        // Only try to refresh if we have a refresh token
+        if (!isBrowser || !localStorage.getItem(REFRESH_TOKEN_KEY)) {
+          throw new Error('No refresh token available');
+        }
+        
         // Try to refresh the token
         const tokens = await refreshToken();
         

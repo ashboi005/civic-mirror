@@ -96,7 +96,7 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/90">
+    <div className="min-h-screen bg-gradient-to-b from-background to-background/90 pb-16 md:pb-0">
       <DashboardHeader />
 
       <div className="container px-4 py-6 md:px-6 md:py-8">

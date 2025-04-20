@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { ThumbsUp } from "lucide-react"
 import { TicketStatusBadge } from "./AdminTicketStatus"
 import { TicketDetailModalProps } from "@/types"  // Import the prop types
+import { updateReportStatus, completeReport } from "@/lib/api"  // Import the updateReportStatus and completeReport API functions
 
 export function TicketDetailModal({
   ticket,
@@ -24,14 +25,36 @@ export function TicketDetailModal({
 }: TicketDetailModalProps) {
   const [isUpdating, setIsUpdating] = useState(false)
 
-  const handleStatusUpdate = (newStatus: string) => {
+  // Function to update the status of the ticket (for "in-progress" or "pending" status)
+  const handleStatusUpdate = async (newStatus: string) => {
     setIsUpdating(true)
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Update the status on the backend
+      await updateReportStatus(ticket.id, newStatus)
+      // Notify the parent component about the status change
       onStatusUpdate(ticket.id, newStatus)
+    } catch (error) {
+      console.error("Error updating report status:", error)
+    } finally {
       setIsUpdating(false)
-    }, 500)
+    }
+  }
+
+  // Function to complete the report (called when the status is "completed")
+  const handleCompleteReport = async () => {
+    setIsUpdating(true)
+
+    try {
+      // Complete the report on the backend
+      await completeReport(ticket.id)
+      // Notify the parent component to mark the report as completed
+      onStatusUpdate(ticket.id, "completed")
+    } catch (error) {
+      console.error("Error completing report:", error)
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   return (
@@ -70,7 +93,6 @@ export function TicketDetailModal({
                 </Avatar>
                 <div>
                   <p className="text-sm font-medium">User {ticket.user_id}</p>
-                  {/* If you want to show a user email, you can map it via a user database */}
                 </div>
               </div>
             </div>
@@ -84,7 +106,6 @@ export function TicketDetailModal({
               </div>
             </div>
           </div>
-
 
           <Separator />
 
@@ -110,10 +131,10 @@ export function TicketDetailModal({
               <Button
                 variant={ticket.status === "completed" ? "default" : "outline"}
                 className={ticket.status === "completed" ? "bg-green-600" : ""}
-                onClick={() => handleStatusUpdate("completed")}
+                onClick={handleCompleteReport}  // Complete the report
                 disabled={isUpdating || ticket.status === "completed"}
               >
-                Completed
+                Complete
               </Button>
             </div>
           </div>

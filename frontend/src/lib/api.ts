@@ -1,7 +1,11 @@
+import { Ticket } from "@/types";
 import axios from "axios";
 
 // Create axios instance with base URL and default config
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://855amc8i0k.execute-api.ap-south-1.amazonaws.com/Prod";
+
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -14,15 +18,19 @@ const api = axios.create({
 
 // Add request interceptor to attach auth token if available
 api.interceptors.request.use((config) => {
-  // Get token from localStorage if available
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const tokenType = typeof window !== "undefined" ? localStorage.getItem("token_type") || "Bearer" : "Bearer";
-  
-  if (token) {
-    config.headers.Authorization = `${tokenType} ${token}`;
+  // Only try to get tokens in browser environment
+  if (isBrowser) {
+    const token = localStorage.getItem("access_token");
+    const tokenType = localStorage.getItem("token_type") || "Bearer";
+    
+    if (token) {
+      config.headers.Authorization = `${tokenType} ${token}`;
+    }
   }
   
   return config;
+}, (error) => {
+  return Promise.reject(error);
 });
 
 // Types
@@ -38,6 +46,16 @@ export interface UserDetails {
   user_id?: number;
 }
 
+export interface Comment {
+  id: number;
+  text: string;
+  user_id: number;
+  report_id: number;
+  created_at: string;
+  updated_at?: string;
+  username?: string;
+}
+
 export interface Report {
   title: string;
   description: string;
@@ -51,6 +69,7 @@ export interface Report {
   updated_at?: string;
   vote_count?: number;
   votes?: Vote[];
+  comments?: number; // Number of comments
 }
 
 export interface Vote {
@@ -59,6 +78,64 @@ export interface Vote {
   user_id?: number;
   created_at?: string;
 }
+
+// Admin Reports API
+export const getAdminReports = async (
+  skip = 0, 
+  limit = 10, 
+  status?: string
+): Promise<Ticket[]> => {
+  const params = { skip, limit, ...(status && { status }) };
+  const response = await api.get("/admin/reports", { params });
+  return response.data;
+};
+
+export const updateReportStatus = async (
+  reportId: number,
+  status: string
+): Promise<any> => {
+  try {
+    console.log(`Updating report with ID ${reportId} to status: ${status}`);
+    
+    const response = await api.patch(`/admin/reports/${reportId}/status`, { status });
+    
+    // Log the response to confirm it was successful
+    console.log("Response data:", response.data);
+    
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Axios error response:", error.response?.data);
+    } else {
+      console.error("Unknown error:", error);
+    }
+    throw new Error("Failed to update report status.");
+  }
+};
+
+
+// Complete report API
+export const completeReport = async (reportId: number): Promise<any> => {
+  try {
+    console.log(`Completing report with ID: ${reportId}`);
+
+    // Send POST request to complete the report
+    const response = await api.post(`/admin/reports/${reportId}/complete`);
+
+    // Log the response to confirm it was successful
+    console.log("Response data:", response.data);
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Axios error response:", error.response?.data);
+    } else {
+      console.error("Unknown error:", error);
+    }
+    throw new Error("Failed to complete report.");
+  }
+};
+
 
 // User Details API
 export const getUserDetails = async (): Promise<UserDetails> => {
@@ -77,12 +154,14 @@ export const createUserDetails = async (details: UserDetails): Promise<UserDetai
 };
 
 // Reports API
-export const createReport = async (reportData: FormData): Promise<Report> => {
-  const response = await api.post("/reports/", reportData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+export const createReport = async (reportData: any): Promise<Report> => {
+  // If reportData is FormData, use multipart/form-data content type
+  // Otherwise, use the default application/json
+  const headers = reportData instanceof FormData
+    ? { "Content-Type": "multipart/form-data" }
+    : {};
+
+  const response = await api.post("/reports/", reportData, { headers });
   return response.data;
 };
 
@@ -113,6 +192,29 @@ export const getReportById = async (reportId: number): Promise<Report> => {
 export const voteForReport = async (reportId: number): Promise<Vote> => {
   const response = await api.post("/reports/vote", { report_id: reportId });
   return response.data;
+};
+
+// Comments API
+export const createComment = async (text: string, reportId: number): Promise<Comment> => {
+  const response = await api.post("/comments/", { 
+    text, 
+    report_id: reportId 
+  });
+  return response.data;
+};
+
+export const getCommentsByReport = async (
+  reportId: number,
+  skip = 0,
+  limit = 100
+): Promise<Comment[]> => {
+  const params = { skip, limit };
+  const response = await api.get(`/comments/report/${reportId}`, { params });
+  return response.data;
+};
+
+export const deleteComment = async (commentId: number): Promise<void> => {
+  await api.delete(`/comments/${commentId}`);
 };
 
 export default api;

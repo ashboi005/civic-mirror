@@ -3,19 +3,22 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Filter, Loader2 } from "lucide-react"
+import { Filter, Loader2, Plus } from "lucide-react"
 import { IssueCard } from "@/components/issue-card"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
 import { EmptyState } from "@/components/empty-state"
 import { getUserReports, Report } from "@/lib/api"
+import { ReportIssueForm } from "@/components/report-issue-form"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 export default function ReportsPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all")
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showReportForm, setShowReportForm] = useState(false)
 
   // Fetch user reports on component mount
   useEffect(() => {
@@ -43,6 +46,18 @@ export default function ReportsPage() {
       setReports(data)
     } catch (err) {
       console.error("Failed to refresh reports after voting:", err)
+    }
+  }
+
+  // Handle form submission to refresh reports
+  const handleFormSubmit = async () => {
+    setShowReportForm(false)
+    // Refresh reports after submitting a new one
+    try {
+      const data = await getUserReports(0, 50)
+      setReports(data)
+    } catch (err) {
+      console.error("Failed to refresh reports after submission:", err)
     }
   }
 
@@ -80,12 +95,38 @@ export default function ReportsPage() {
                 <h2 className="text-2xl font-bold tracking-tight">My Reports</h2>
                 <p className="text-muted-foreground">View and manage all your reported issues</p>
               </div>
-              <Button variant="outline" size="sm" className="h-8 gap-1">
-                <Filter className="h-4 w-4" /> Filter
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-8 gap-1">
+                  <Filter className="h-4 w-4" /> Filter
+                </Button>
+                <Button
+                  onClick={() => setShowReportForm(true)}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 h-8 gap-1"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4" /> Report Issue
+                </Button>
+              </div>
             </div>
 
-            {loading ? (
+            {showReportForm ? (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <Card className="border-gray-800 bg-black/40 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Report a New Issue</CardTitle>
+                      <CardDescription>Fill out the form below to report a civic issue</CardDescription>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setShowReportForm(false)}>
+                      <Loader2 className="h-4 w-4" />
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <ReportIssueForm onSubmit={handleFormSubmit} />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : loading ? (
               <div className="flex justify-center items-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>

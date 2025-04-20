@@ -8,7 +8,7 @@ export function TicketSort({ sortBy, setSortBy, toggleSortOrder }: TicketSortPro
   return (
     <div className="flex gap-2">
       <Select value={sortBy} onValueChange={setSortBy}>
-        <SelectTrigger className="w-[180px] bg-white">
+        <SelectTrigger className="w-[180px] bg-white dark:bg-neutral-700 dark:text-neutral-200">
           <SelectValue placeholder="Sort by" />
         </SelectTrigger>
         <SelectContent>
