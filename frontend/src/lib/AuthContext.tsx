@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { isAuthenticated, getCurrentUser, logout, User } from './auth';
-import { useRouter } from 'next/navigation';
+import { isAuthenticated, getCurrentUser, logout, User, refreshToken } from './auth';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -10,6 +10,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  checkAndRefreshToken: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,6 +20,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  
+  // Function to check and refresh the auth token
+  const checkAndRefreshToken = async (): Promise<boolean> => {
+    try {
+      // Only attempt to refresh if we think we're logged in
+      if (isAuthenticated()) {
+        const tokens = await refreshToken();
+        return !!tokens; // Return true if we successfully refreshed
+      }
+      return false;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      return false;
+    }
+  };
   
   const refreshUser = async () => {
     if (isAuthenticated()) {
@@ -27,9 +44,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (userData) {
           setUser(userData);
           setIsLoggedIn(true);
-        } else {
-          handleLogout();
+          return;
         }
+        
+        // If we didn't get user data, try to refresh the token once
+        const tokenRefreshed = await checkAndRefreshToken();
+        if (tokenRefreshed) {
+          const refreshedUserData = await getCurrentUser();
+          if (refreshedUserData) {
+            setUser(refreshedUserData);
+            setIsLoggedIn(true);
+            return;
+          }
+        }
+        
+        // If we still don't have user data, log out
+        handleLogout();
       } catch (error) {
         console.error('Error refreshing user:', error);
         handleLogout();
@@ -44,7 +74,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       try {
         setLoading(true);
-        await refreshUser();
+        
+        // Check if we're on a public page
+        const isPublicPage = pathname === '/login' || 
+                            pathname === '/register' || 
+                            pathname === '/' ||
+                            pathname === undefined;
+        
+        if (isAuthenticated()) {
+          await refreshUser();
+        } else if (!isPublicPage) {
+          // If we're not authenticated and not on a public page, redirect to login
+          router.push('/login');
+        }
       } catch (error) {
         console.error('Auth initialization error:', error);
         setUser(null);
@@ -55,13 +97,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     
     initAuth();
-  }, []);
+  }, [pathname]);
   
   const handleLogout = () => {
     logout();
     setUser(null);
     setIsLoggedIn(false);
-    router.push('/login');
   };
   
   return (
@@ -72,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoggedIn,
         logout: handleLogout,
         refreshUser,
+        checkAndRefreshToken
       }}
     >
       {children}

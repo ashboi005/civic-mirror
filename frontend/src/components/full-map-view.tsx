@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { MapPin, Navigation } from "lucide-react"
+import React, { useState, useCallback, useEffect } from "react"
 import { Report } from "@/lib/api"
+import { useLoadScript } from '@react-google-maps/api';
 
 // Enhanced report type with coordinates for map display
 export interface MapReport extends Report {
@@ -14,11 +14,6 @@ export interface MapReport extends Report {
   date?: string;
   comments?: number;
   image?: string;
-  // Add these properties for the component to use
-  position?: {
-    left: number;
-    top: number;
-  };
   distance?: number | null;
 }
 
@@ -36,274 +31,296 @@ interface FullMapViewProps {
   userLocation?: Coordinates | null;
 }
 
-export function FullMapView({ issues, onSelectIssue, selectedIssueId, onVote, userLocation }: FullMapViewProps) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const [mapCenterLat, setMapCenterLat] = useState(40.7128) // Default to NYC
-  const [mapCenterLng, setMapCenterLng] = useState(-74.006)
+// Container style for Google Maps
+const containerStyle = {
+  width: '100%',
+  height: '100%'
+};
 
-  useEffect(() => {
-    // If user location exists, update the map center
-    if (userLocation) {
-      setMapCenterLat(userLocation.lat);
-      setMapCenterLng(userLocation.lng);
-    }
-  }, [userLocation]);
-
-  useEffect(() => {
-    if (!mapRef.current) return
-
-    const mapElement = mapRef.current
-
-    // Create a canvas for the map background
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    canvas.width = mapElement.clientWidth || 800
-    canvas.height = mapElement.clientHeight || 600
-
-    // Draw map background
-    ctx.fillStyle = "#111111"
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-    // Draw grid
-    ctx.strokeStyle = "#222222"
-    ctx.lineWidth = 1
-
-    // Draw grid lines
-    const gridSize = 40
-    for (let x = 0; x < canvas.width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, canvas.height)
-      ctx.stroke()
-    }
-
-    for (let y = 0; y < canvas.height; y += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(canvas.width, y)
-      ctx.stroke()
-    }
-
-    // Draw main roads
-    ctx.strokeStyle = "#333333"
-    ctx.lineWidth = 4
-
-    // Horizontal main roads
-    for (let y = gridSize * 2; y < canvas.height; y += gridSize * 4) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(canvas.width, y)
-      ctx.stroke()
-    }
-
-    // Vertical main roads
-    for (let x = gridSize * 2; x < canvas.width; x += gridSize * 4) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, canvas.height)
-      ctx.stroke()
-    }
-
-    // Secondary roads
-    ctx.strokeStyle = "#2a2a2a";
-    ctx.lineWidth = 2;
-
-    // Draw some intersecting roads
-    for (let i = 1; i < 4; i++) {
-      // Diagonal roads
-      ctx.beginPath()
-      ctx.moveTo(canvas.width * (i/4), 0)
-      ctx.lineTo(canvas.width, canvas.height * (i/4))
-      ctx.stroke()
-      
-      ctx.beginPath()
-      ctx.moveTo(0, canvas.height * (i/4))
-      ctx.lineTo(canvas.width * (i/4), canvas.height)
-      ctx.stroke()
-    }
-
-    // Draw city blocks
-    for (let x = gridSize * 4; x < canvas.width; x += gridSize * 8) {
-      for (let y = gridSize * 4; y < canvas.height; y += gridSize * 8) {
-        ctx.fillStyle = "#1a1a1a"
-        ctx.fillRect(x, y, gridSize * 2, gridSize * 2)
-      }
-    }
-
-    // Add a blue dot for current location (only if we have a real user location)
-    if (userLocation) {
-      // Draw pulsing effect
-      ctx.fillStyle = "rgba(59, 130, 246, 0.2)" // Semi-transparent blue
-      ctx.beginPath()
-      ctx.arc(canvas.width / 2, canvas.height / 2, 24, 0, Math.PI * 2)
-      ctx.fill()
-      
-      // Draw blue dot
-      ctx.fillStyle = "#3b82f6"
-      ctx.beginPath()
-      ctx.arc(canvas.width / 2, canvas.height / 2, 10, 0, Math.PI * 2)
-      ctx.fill()
-
-      ctx.strokeStyle = "#3b82f6"
-      ctx.lineWidth = 3
-      ctx.beginPath()
-      ctx.arc(canvas.width / 2, canvas.height / 2, 16, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-
-    // Set the canvas as the background
-    const dataUrl = canvas.toDataURL()
-    mapElement.style.backgroundImage = `url(${dataUrl})`
-    mapElement.style.backgroundSize = "cover"
-    mapElement.style.backgroundPosition = "center"
-
-    return () => {
-      mapElement.style.backgroundImage = ""
-    }
-  }, [mapRef, userLocation, mapCenterLat, mapCenterLng])
-
-  const getMarkerColor = (status: string | undefined) => {
-    switch (status) {
-      case "pending":
-        return "text-amber-500 bg-amber-500/20 border border-amber-500/40"
-      case "in_progress":
-        return "text-blue-500 bg-blue-500/20 border border-blue-500/40"
-      case "resolved":
-        return "text-green-500 bg-green-500/20 border border-green-500/40"
-      default:
-        return "text-amber-500 bg-amber-500/20 border border-amber-500/40" // Default to pending
-    }
+// Map styling to match dark theme
+const mapStyles = [
+  {
+    "elementType": "geometry",
+    "stylers": [{ "color": "#242f3e" }]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [{ "color": "#242f3e" }]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#746855" }]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#d59563" }]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#d59563" }]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#263c3f" }]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#6b9a76" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#38414e" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.stroke",
+    "stylers": [{ "color": "#212a37" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#9ca5b3" }]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#746855" }]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.stroke",
+    "stylers": [{ "color": "#1f2835" }]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#f3d19c" }]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#2f3948" }]
+  },
+  {
+    "featureType": "transit.station",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#d59563" }]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#17263c" }]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#515c6d" }]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.stroke",
+    "stylers": [{ "color": "#17263c" }]
   }
+];
 
-  // Calculate distance between user and issue
-  const calculateDistance = (issueCoords: Coordinates): number | null => {
-    if (!userLocation) return null;
-    
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (issueCoords.lat - userLocation.lat) * Math.PI / 180;
-    const dLon = (issueCoords.lng - userLocation.lng) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(userLocation.lat * Math.PI / 180) * Math.cos(issueCoords.lat * Math.PI / 180) * 
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+// Libraries to load - add marker library
+const libraries: ["places", "marker"] = ['places', 'marker'];
+
+export function FullMapView({ issues, onSelectIssue, selectedIssueId, onVote, userLocation }: FullMapViewProps) {
+  // State for currently open InfoWindow
+  const [activeMarker, setActiveMarker] = useState<number | null>(null);
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+  const [markers, setMarkers] = useState<{[key: number]: google.maps.marker.AdvancedMarkerElement}>({});
+  const [infoWindows, setInfoWindows] = useState<{[key: number]: google.maps.InfoWindow}>({});
+
+  // Google Maps API loader with marker library
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries,
+    version: "weekly" // Use the latest weekly version
+  });
+
+  // Handle map load
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    setMapInstance(map);
+  }, []);
+
+  // Handle marker click
+  const handleMarkerClick = (issueId: number, issue: MapReport) => {
+    setActiveMarker(issueId);
+    onSelectIssue(issue);
+
+    // Open the info window for this marker
+    const infoWindow = infoWindows[issueId];
+    if (infoWindow && markers[issueId]) {
+      infoWindow.open({
+        anchor: markers[issueId],
+        map: mapInstance
+      });
+    }
   };
 
-  // Position issues evenly across the map
-  const issuesWithPositions = issues.map((issue, index) => {
-    // Create a more predictable distribution of markers across the map
-    // Rather than using the actual coordinates which may not display well
-    const totalIssues = issues.length;
-    const columns = Math.ceil(Math.sqrt(totalIssues));
-    const rows = Math.ceil(totalIssues / columns);
+  // Create markers when map and issues are available
+  useEffect(() => {
+    if (!isLoaded || !mapInstance) return;
     
-    const col = index % columns;
-    const row = Math.floor(index / columns);
-    
-    // Position markers in a grid pattern
-    const left = 20 + (col * 60 / columns); 
-    const top = 50 + (row * 400 / rows);
-    
-    // Calculate distance from user if available
-    const distance = calculateDistance(issue.coordinates);
-    
-    return {
-      ...issue,
-      position: { left, top },
-      distance
-    };
-  });
+    // Clear existing markers
+    Object.values(markers).forEach((marker) => {
+      marker.map = null;
+    });
 
-  // Group markers by position to avoid overlap
-  const groupedMarkers: Record<string, MapReport[]> = {};
-  
-  issuesWithPositions.forEach(issue => {
-    const posKey = `${Math.round(issue.position.left)}-${Math.round(issue.position.top)}`;
-    if (!groupedMarkers[posKey]) {
-      groupedMarkers[posKey] = [];
+    // Clear existing info windows
+    Object.values(infoWindows).forEach((infoWindow) => {
+      infoWindow.close();
+    });
+
+    const newMarkers: {[key: number]: google.maps.marker.AdvancedMarkerElement} = {};
+    const newInfoWindows: {[key: number]: google.maps.InfoWindow} = {};
+
+    issues.filter(issue => issue.id !== undefined).forEach((issue) => {
+      if (!issue.id) return;
+
+      // Create marker content based on issue status
+      const markerColor = issue.status === 'pending' ? '#f59e0b' : 
+                         issue.status === 'in_progress' ? '#3b82f6' : 
+                         issue.status === 'resolved' ? '#10b981' : '#f59e0b';
+
+      // Create a pin element
+      const pinElement = document.createElement('div');
+      pinElement.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="${markerColor}">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+      `;
+      pinElement.style.cursor = 'pointer';
+      
+      // Add glow effect for selected issue
+      if (issue.id === selectedIssueId) {
+        pinElement.style.filter = 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.8))';
+        pinElement.style.zIndex = '1000';
+      }
+
+      // Create advanced marker
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: mapInstance,
+        position: issue.coordinates,
+        content: pinElement,
+        title: issue.title
+      });
+
+      // Create info window content
+      const infoContent = document.createElement('div');
+      infoContent.className = 'bg-gray-900 p-2 rounded max-w-[200px]';
+      infoContent.innerHTML = `
+        <h4 class="font-medium text-sm">${issue.title}</h4>
+        <p class="text-gray-400 text-xs mt-1">${issue.location || 'Unknown location'}</p>
+        ${issue.distance !== null && issue.distance !== undefined ? 
+          `<p class="text-blue-400 text-xs mt-1">${issue.distance.toFixed(1)}km away</p>` : 
+          ''}
+      `;
+      infoContent.style.background = '#1f2937';
+      infoContent.style.color = 'white';
+      infoContent.style.padding = '8px';
+      infoContent.style.borderRadius = '4px';
+      infoContent.style.maxWidth = '200px';
+
+      // Create info window
+      const infoWindow = new google.maps.InfoWindow({
+        content: infoContent
+      });
+
+      // Add event listener to marker
+      marker.addEventListener('click', () => {
+        handleMarkerClick(issue.id as number, issue);
+      });
+
+      // Close other info windows when a new one is opened
+      infoWindow.addListener('closeclick', () => {
+        setActiveMarker(null);
+      });
+
+      newMarkers[issue.id] = marker;
+      newInfoWindows[issue.id] = infoWindow;
+
+      // Open info window if this is the selected issue
+      if (issue.id === selectedIssueId) {
+        infoWindow.open({
+          anchor: marker,
+          map: mapInstance
+        });
+        setActiveMarker(issue.id);
+      }
+    });
+
+    setMarkers(newMarkers);
+    setInfoWindows(newInfoWindows);
+
+    // Add user location marker if available
+    if (userLocation) {
+      const userLocationElement = document.createElement('div');
+      userLocationElement.innerHTML = `
+        <div style="background-color: #3b82f6; border-radius: 50%; width: 16px; height: 16px; border: 3px solid white;"></div>
+      `;
+
+      new google.maps.marker.AdvancedMarkerElement({
+        map: mapInstance,
+        position: userLocation,
+        content: userLocationElement,
+        title: "Your location"
+      });
     }
-    groupedMarkers[posKey].push(issue);
-  });
+  }, [isLoaded, mapInstance, issues, selectedIssueId, userLocation]);
 
-  return (
-    <div className="relative h-full w-full overflow-hidden" ref={mapRef}>
-      {/* Issue markers */}
-      {Object.entries(groupedMarkers).map(([posKey, issues]) => {
-        const issue = issues[0]; // Use the first issue for positioning
-        const isMultiple = issues.length > 1;
-        
-        return (
-          <div
-            key={posKey}
-            className={`absolute flex flex-col items-center group cursor-pointer transition-transform duration-200 ${
-              issues.some(i => i.id === selectedIssueId) ? "scale-125 z-10" : "hover:scale-110"
-            }`}
-            style={{ 
-              left: `${issue.position?.left ?? 0}%`, 
-              top: `${issue.position?.top ?? 0}px` 
-            }}
-          >
-            <div 
-              className={`p-2 rounded-full ${getMarkerColor(issue.status)} shadow-lg ${
-                issues.some(i => i.id === selectedIssueId) ? "ring-2 ring-white" : ""
-              } ${isMultiple ? "border-2" : ""}`}
-              onClick={() => onSelectIssue(issue)}
-            >
-              {isMultiple ? (
-                <div className="relative">
-                  <MapPin className="h-6 w-6" />
-                  <div className="absolute -top-1 -right-1 bg-gray-900 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
-                    {issues.length}
-                  </div>
-                </div>
-              ) : (
-                <MapPin className="h-6 w-6" />
-              )}
-            </div>
-            <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30">
-              <div className="bg-black/90 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs max-w-[200px]">
-                {isMultiple ? (
-                  <>
-                    <p className="font-semibold">{issues.length} Issues at this location</p>
-                    <ul className="mt-1 space-y-1">
-                      {issues.slice(0, 3).map(i => (
-                        <li key={i.id} className="text-gray-300 text-xs">{i.title}</li>
-                      ))}
-                      {issues.length > 3 && <li className="text-gray-400 text-xs">...and {issues.length - 3} more</li>}
-                    </ul>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-semibold">{issue.title}</p>
-                    <p className="text-gray-400 text-xs mt-1">{issue.location || 'Unknown location'}</p>
-                  </>
-                )}
-                
-                {issue.distance !== null && issue.distance !== undefined && (
-                  <p className="text-blue-400 text-xs mt-1">
-                    {issue.distance.toFixed(1)}km away
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-
-      {/* User location indicator */}
-      {userLocation && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
-          <div className="relative">
-            <div className="absolute -inset-4 bg-blue-500 rounded-full opacity-20 animate-ping"></div>
-            <div className="relative bg-blue-500 p-2 rounded-full shadow-lg">
-              <Navigation className="h-4 w-4 text-white" />
-            </div>
+  // Handle render for Google Map
+  const renderMap = () => {
+    if (loadError) {
+      return (
+        <div className="h-full w-full flex items-center justify-center bg-gray-900">
+          <div className="text-red-500">
+            Error loading Google Maps: {loadError.message}
           </div>
         </div>
-      )}
-    </div>
-  )
+      );
+    }
+
+    if (!isLoaded) {
+      return (
+        <div className="h-full w-full flex items-center justify-center bg-gray-900">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            <p className="mt-4 text-gray-400">Loading map...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-full w-full" id="map-container">
+        <div id="google-map" className="h-full w-full" ref={(el) => {
+          if (el && !mapInstance) {
+            // Initialize the map
+            const map = new google.maps.Map(el, {
+              center: userLocation || { lat: 40.7128, lng: -74.006 },
+              zoom: 12,
+              styles: mapStyles,
+              disableDefaultUI: true,
+              zoomControl: true,
+              fullscreenControl: false,
+              streetViewControl: false,
+              mapTypeControl: false
+            });
+            
+            handleMapLoad(map);
+          }
+        }} />
+      </div>
+    );
+  };
+
+  return renderMap();
 }

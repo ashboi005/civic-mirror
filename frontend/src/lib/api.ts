@@ -1,5 +1,6 @@
 import { Ticket } from "@/types";
 import axios from "axios";
+import { handleAuthError } from "./auth";
 
 // Create axios instance with base URL and default config
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -14,6 +15,7 @@ const api = axios.create({
   },
   // Remove withCredentials to avoid CORS issues with wildcard origin
   withCredentials: false,
+  timeout: 15000, // Set a timeout to prevent hanging requests
 });
 
 // Add request interceptor to attach auth token if available
@@ -32,6 +34,12 @@ api.interceptors.request.use((config) => {
 }, (error) => {
   return Promise.reject(error);
 });
+
+// Add response interceptor to handle token refresh
+api.interceptors.response.use(
+  (response) => response,
+  handleAuthError // Use the function from auth.ts to avoid circular dependencies
+);
 
 // Types
 export interface UserDetails {
@@ -70,6 +78,10 @@ export interface Report {
   vote_count?: number;
   votes?: Vote[];
   comments?: number; // Number of comments
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface Vote {

@@ -32,11 +32,11 @@ export function Navbar() {
           </Link>
         </nav>
         <div className="ml-auto md:ml-4 flex gap-2">
-          <Link href="/dashboard">
+          {/* <Link href="/dashboard">
             <Button variant="outline" className="hidden md:flex">
               Dashboard
             </Button>
-          </Link>
+          </Link> */}
           <Link href="/dashboard">
             <Button className="hidden md:flex bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700">
               Sign In

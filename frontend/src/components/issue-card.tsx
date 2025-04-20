@@ -4,10 +4,11 @@ import { motion } from "framer-motion"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ThumbsUp, MessageSquare, Clock, CheckCircle, AlertTriangle } from "lucide-react"
+import { ThumbsUp, MessageSquare, Clock, CheckCircle, AlertTriangle, Image } from "lucide-react"
 import { Report, voteForReport } from "@/lib/api"
 import { useState } from "react"
 import { ReportDetailDialog } from "@/components/report-detail-dialog"
+import { handleImageError, getImageUrl } from "@/lib/utils"
 
 interface IssueCardProps {
   issue: Report;
@@ -18,6 +19,18 @@ export function IssueCard({ issue, onVote }: IssueCardProps) {
   const [isVoting, setIsVoting] = useState(false);
   const [voteCount, setVoteCount] = useState(issue.vote_count || 0);
   const [showDetails, setShowDetails] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // Handle image loading errors properly
+  const onImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    setImageError(true);
+    handleImageError(e);
+  };
+
+  const onImageLoad = () => {
+    setImageLoaded(true);
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -77,10 +90,22 @@ export function IssueCard({ issue, onVote }: IssueCardProps) {
         <Card className="border-gray-800 bg-black/40 backdrop-blur-sm overflow-hidden h-full">
           <div className="relative h-40 overflow-hidden">
             <img
-              src={issue.image_url || "/placeholder.svg"}
+              src={getImageUrl(issue.image_url || "/placeholder.svg")}
               alt={issue.title}
-              className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+              className={`w-full h-full object-cover transition-transform duration-300 hover:scale-105 ${imageLoaded ? '' : 'hidden'}`}
+              onError={onImageError}
+              onLoad={onImageLoad}
             />
+            {!imageLoaded && !imageError && (
+              <div className="flex items-center justify-center h-full bg-gray-800">
+                <Image className="h-10 w-10 text-gray-500" />
+              </div>
+            )}
+            {imageError && (
+              <div className="flex items-center justify-center h-full bg-gray-800">
+                <Image className="h-10 w-10 text-red-500" />
+              </div>
+            )}
             <div className="absolute top-2 right-2 flex gap-2">
               <Badge variant="outline" className="bg-black/60 backdrop-blur-sm">
                 {issue.type}
