@@ -2,7 +2,7 @@ import { Ticket } from "@/types";
 import axios from "axios";
 
 // Create axios instance with base URL and default config
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://855amc8i0k.execute-api.ap-south-1.amazonaws.com/Prod";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';
