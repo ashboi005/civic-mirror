@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Home, Map, FileText, Bell, Settings, LogOut, BarChart3, Users, ThumbsUp } from "lucide-react"
+import { Home, FileText, Bell, Settings, LogOut, Users, ThumbsUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 
@@ -25,12 +25,6 @@ export function DashboardNav() {
       active: pathname === "/dashboard/reports",
     },
     {
-      label: "Explore Map",
-      icon: Map,
-      href: "/dashboard/map",
-      active: pathname === "/dashboard/map",
-    },
-    {
       label: "Notifications",
       icon: Bell,
       href: "/dashboard/notifications",
@@ -47,12 +41,6 @@ export function DashboardNav() {
       icon: Users,
       href: "/dashboard/community",
       active: pathname === "/dashboard/community",
-    },
-    {
-      label: "Statistics",
-      icon: BarChart3,
-      href: "/dashboard/statistics",
-      active: pathname === "/dashboard/statistics",
     },
     {
       label: "Settings",
@@ -77,12 +65,6 @@ export function DashboardNav() {
       active: pathname === "/dashboard/reports",
     },
     {
-      label: "Map",
-      icon: Map,
-      href: "/dashboard/map",
-      active: pathname === "/dashboard/map",
-    },
-    {
       label: "Notifications",
       icon: Bell,
       href: "/dashboard/notifications",
@@ -93,7 +75,6 @@ export function DashboardNav() {
       icon: Settings,
       href: "/dashboard/settings",
       active: pathname === "/dashboard/settings" || 
-              pathname === "/dashboard/statistics" || 
               pathname === "/dashboard/community" || 
               pathname === "/dashboard/upvotes",
     },
