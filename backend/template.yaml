@@ -34,6 +34,22 @@ Parameters:
     Description: "Database connection URL"
     NoEcho: true
 
+  PusherAppId:
+    Type: String
+    Description: "Pusher App ID"
+
+  PusherKey:
+    Type: String
+    Description: "Pusher Key"
+
+  PusherSecret:
+    Type: String
+    Description: "Pusher Secret"
+
+  PusherCluster:
+    Type: String
+    Description: "Pusher Cluster"
+
 Resources:
   FastApiFunction:
     Type: AWS::Serverless::Function
@@ -72,6 +88,10 @@ Resources:
           TWILIO_PHONE_NUMBER: !Ref TwilioPhoneNumber
           SECRET_KEY: !Ref SecretKey
           DATABASE_URL: !Ref DatabaseURL
+          PUSHER_APP_ID: !Ref PusherAppId
+          PUSHER_KEY: !Ref PusherKey
+          PUSHER_SECRET: !Ref PusherSecret
+          PUSHER_CLUSTER: !Ref PusherCluster
       Events:
         ApiEvent:
           Type: Api

@@ -157,3 +157,41 @@ async def read_users_me(
     """Get current user."""
     return current_user
 
+
+@router.get("/me/status", response_model=dict)
+async def check_user_status(
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """Debug endpoint to check user status."""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "is_active": current_user.is_active,
+        "is_superuser": current_user.is_superuser,
+        "role": current_user.role
+    }
+
+
+@router.post("/make-superuser/{user_id}", response_model=UserSchema)
+async def make_superuser(
+    user_id: int,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Make a user a superuser (for development purposes only)."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Set as superuser
+    user.is_superuser = True
+    await db.commit()
+    await db.refresh(user)
+    
+    return user
+
