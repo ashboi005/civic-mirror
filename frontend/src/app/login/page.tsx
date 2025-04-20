@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -15,23 +15,41 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { refreshUser, user } = useAuth();
 
+  // Handle login form submission
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+
     try {
-      await login(loginData.username, loginData.password);
-      await refreshUser(); // Update auth context
-      router.push('/dashboard'); // Redirect to dashboard after successful login
+      await login(loginData.username, loginData.password); // Authenticate the user
+      await refreshUser(); // Refresh user data after successful login
+
+      
+      if (user?.is_superuser) {
+        router.push('/admin-dashboard'); // Admin Dashboard
+      } else {
+        router.push('/dashboard'); // Regular user dashboard
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
+
+  // UseEffect to ensure redirection only happens once user state is updated
+  useEffect(() => {
+    if (user) {
+      if (user?.is_superuser) {
+        router.push('/admin-dashboard'); // Admin Dashboard
+      } else {
+        router.push('/dashboard'); // Regular User Dashboard
+      }
+    }
+  }, [user, router]); // Triggered when 'user' state changes
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -40,17 +58,17 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold">Welcome Back</h1>
           <p className="mt-2 text-muted-foreground">Sign in to your Civic Mirror account</p>
         </div>
-        
+
         {error && (
           <div className="mb-4 rounded border border-destructive bg-destructive/10 p-3 text-destructive">
             {error}
           </div>
         )}
-        
+
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="username">Username</Label>
-            <Input 
+            <Input
               id="username"
               value={loginData.username}
               onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
@@ -58,7 +76,7 @@ export default function LoginPage() {
               required
             />
           </div>
-          
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
@@ -66,7 +84,7 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <Input 
+            <Input
               id="password"
               type="password"
               value={loginData.password}
@@ -75,12 +93,12 @@ export default function LoginPage() {
               required
             />
           </div>
-          
+
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign in'}
           </Button>
         </form>
-        
+
         <div className="mt-6 text-center text-sm">
           Don&apos;t have an account?{' '}
           <Link href="/register" className="font-medium text-primary hover:underline">

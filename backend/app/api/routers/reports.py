@@ -1,23 +1,27 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, desc
 from sqlalchemy.orm import joinedload
 from app.db.database import get_db
 from app.models.user import User
-from app.models.report import Report, ReportStatus, ReportType
+from app.models.report import Report, ReportStatus
 from app.models.vote import Vote
 from app.schemas.report import ReportCreate, Report as ReportSchema, ReportWithVotes
 from app.schemas.vote import VoteCreate, Vote as VoteSchema
 from app.utils.deps import get_current_user
 from app.utils.s3 import upload_base64_image_to_s3
+from app.utils.gemini import classify_image
 from typing import Any, List, Optional
 import json
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
+import re
+
 
 router = APIRouter()
 
+VALID_ROLES = ["garbage", "labour", "electrician", "plumber", "all"]
 
 @router.post("/", response_model=ReportSchema, summary="Create a new report with JSON and base64 image",
     description="""
@@ -25,6 +29,7 @@ router = APIRouter()
     
     The image should be provided as a base64-encoded string in the `base64_image` field,
     and the image type (extension) should be provided in the `image_type` field (e.g., 'jpg', 'png').
+    If an image is provided, the `type` field will be automatically determined by AI.
     """
 )
 async def create_report(
@@ -32,7 +37,7 @@ async def create_report(
         ...,
         examples={
             "with_image": {
-                "summary": "Create report with base64 image",
+                "summary": "Create report with base64 image (type will be auto-detected)",
                 "description": "A normal example with base64 encoded image",
                 "value": {
                     "title": "Pothole on Main Street",
@@ -44,7 +49,7 @@ async def create_report(
                 }
             },
             "without_image": {
-                "summary": "Create report without image",
+                "summary": "Create report without image (uses provided type)",
                 "description": "An example without an image",
                 "value": {
                     "title": "Noise complaint",
@@ -59,38 +64,62 @@ async def create_report(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """
-    Create a new report.
+    Create a new report. If an image is provided, its type is automatically classified by Gemini.
     """
     import logging
     logger = logging.getLogger(__name__)
     
-    # Upload image to S3 if provided
     image_url = None
+    report_type = report.type  # Default to user-provided type
+
     if report.base64_image and report.image_type:
-        logger.info(f"Attempting to upload base64 image with type: {report.image_type}")
+        logger.info(f"Image provided. Attempting upload and AI classification.")
+        # 1. Upload image to S3
         try:
-            # Validate base64 image string is not empty
             if not report.base64_image.strip():
                 logger.warning("Base64 image string is empty")
                 raise ValueError("Base64 image string is empty")
-                
             image_url = await upload_base64_image_to_s3(report.base64_image, report.image_type)
             logger.info(f"Image uploaded successfully, URL: {image_url}")
         except Exception as e:
-            # Log the error but continue without image
-            logger.error(f"Failed to upload image: {str(e)}")
-            # Optionally raise an HTTP exception if image upload is required
+            logger.error(f"Failed to upload image: {str(e)}", exc_info=True)
+            # Decide if upload failure should prevent report creation
             # raise HTTPException(status_code=400, detail=f"Image upload failed: {str(e)}")
+
+        # 2. Classify image with Gemini
+        try:
+            logger.info("Attempting Gemini image classification...")
+            response = await classify_image(report.base64_image)
+            
+            # Directly check if the response is in VALID_ROLES
+            if response in VALID_ROLES:
+                logger.info(f"Gemini classification successful: {response}")
+                report_type = response
+            else:
+                logger.warning(f"Gemini classification returned unexpected result: '{response}'. Defaulting to 'miscellaneous'.")
+                report_type = "miscellaneous"
+        except Exception as e:
+            logger.error(f"Gemini classification failed: {str(e)}", exc_info=True)
+            logger.warning(f"Falling back to user-provided type: {report.type}")
+            report_type = report.type  # Explicitly fall back
+
     else:
-        logger.info("No image provided or image type missing")
-    
-    # Create report
-    logger.info(f"Creating report with title: {report.title}, image_url: {image_url}")
+        logger.info("No image provided or image type missing. Using user-provided type.")
+        report_type = report.type
+
+    # Remove the validation against ReportType
+    # Validate the final report_type against the enum
+    if report_type not in VALID_ROLES:
+        logger.warning(f"Invalid report type determined: '{report_type}'. Defaulting to 'miscellaneous'.")
+        report_type = "miscellaneous"  # Use the correct fallback
+
+    # Create report with the determined type and image_url
+    logger.info(f"Creating report with title: {report.title}, type: {report_type}, image_url: {image_url}")
     new_report = Report(
         user_id=current_user.id,
         title=report.title,
         description=report.description,
-        type=report.type,
+        type=report_type, # Use the determined type (Gemini or user)
         location=report.location,
         image_url=image_url,
         status=ReportStatus.PENDING
@@ -101,7 +130,7 @@ async def create_report(
     await db.refresh(new_report)
     
     # Verify the image_url was saved correctly
-    logger.info(f"Report created with ID: {new_report.id}, image_url: {new_report.image_url}")
+    logger.info(f"Report created with ID: {new_report.id}, type: {new_report.type}, image_url: {new_report.image_url}")
     
     # Add vote_count to the response
     setattr(new_report, "vote_count", 0)

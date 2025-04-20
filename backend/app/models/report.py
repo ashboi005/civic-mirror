@@ -5,11 +5,6 @@ from app.db.database import Base
 import enum
 
 
-class ReportType(str, enum.Enum):
-    AI_DETECTED = "ai_detected"
-    MISCELLANEOUS = "miscellaneous"
-
-
 class ReportStatus(str, enum.Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -23,7 +18,7 @@ class Report(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    type = Column(String, nullable=False, default=ReportType.MISCELLANEOUS)
+    type = Column(String, nullable=False)
     status = Column(String, nullable=False, default=ReportStatus.PENDING)
     image_url = Column(String, nullable=True)
     location = Column(String, nullable=True)

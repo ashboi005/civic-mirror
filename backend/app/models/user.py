@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 from app.db.database import Base
 
 # Valid user roles when is_superuser is True
-VALID_ROLES = ["garbage", "labour", "electrician", "plumber", "all"]
+VALID_ROLES = ["garbage", "labour", "electrician", "plumber", "miscellaneous", "super"]
 
 
 class User(Base):

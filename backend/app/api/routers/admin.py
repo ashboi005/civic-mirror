@@ -132,6 +132,11 @@ async def get_all_reports_admin(
         }
         report_list.append(report_dict)
     
+    # In the get_all_reports_admin function, add logic for the super role
+    if current_user.role == "super":
+        # Admin can see all reports
+        pass
+    
     return report_list
 
 
