@@ -1,3 +1,4 @@
+import { Ticket } from "@/types";
 import axios from "axios";
 
 // Create axios instance with base URL and default config
@@ -59,6 +60,64 @@ export interface Vote {
   user_id?: number;
   created_at?: string;
 }
+
+// Admin Reports API
+export const getAdminReports = async (
+  skip = 0, 
+  limit = 10, 
+  status?: string
+): Promise<Ticket[]> => {
+  const params = { skip, limit, ...(status && { status }) };
+  const response = await api.get("/admin/reports", { params });
+  return response.data;
+};
+
+export const updateReportStatus = async (
+  reportId: number,
+  status: string
+): Promise<any> => {
+  try {
+    console.log(`Updating report with ID ${reportId} to status: ${status}`);
+    
+    const response = await api.patch(`/admin/reports/${reportId}/status`, { status });
+    
+    // Log the response to confirm it was successful
+    console.log("Response data:", response.data);
+    
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Axios error response:", error.response?.data);
+    } else {
+      console.error("Unknown error:", error);
+    }
+    throw new Error("Failed to update report status.");
+  }
+};
+
+
+// Complete report API
+export const completeReport = async (reportId: number): Promise<any> => {
+  try {
+    console.log(`Completing report with ID: ${reportId}`);
+
+    // Send POST request to complete the report
+    const response = await api.post(`/admin/reports/${reportId}/complete`);
+
+    // Log the response to confirm it was successful
+    console.log("Response data:", response.data);
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Axios error response:", error.response?.data);
+    } else {
+      console.error("Unknown error:", error);
+    }
+    throw new Error("Failed to complete report.");
+  }
+};
+
 
 // User Details API
 export const getUserDetails = async (): Promise<UserDetails> => {

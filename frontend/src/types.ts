@@ -11,10 +11,17 @@ export interface Ticket {
     created_at: string;  
     updated_at: string; 
     vote_count: number;  
-    votes: string[]; 
+    votes: Vote[]; 
   }
   
 
+  export interface Vote {
+    report_id: number;
+    id?: number;
+    user_id?: number;
+    created_at?: string;
+  }
+  
 export interface TicketSortProps {
     sortBy: string;  
     setSortBy: (sortBy: string) => void; 
@@ -41,7 +48,6 @@ export interface TicketSortProps {
 
   export interface TicketCardProps {
     ticket: Ticket;
-    onUpvote: (ticketId: number) => void;
     onViewDetails: () => void;
   }
   
@@ -56,7 +62,7 @@ export interface TicketSortProps {
   // TabsContainer Props
   export interface TabsContainerProps {
     filteredTickets: Ticket[];  // Corrected to use Ticket type
-    handleUpvote: (ticketId: number) => void;
+  
     setSelectedTicket: (ticket: Ticket) => void;  // Updated to expect Ticket type
     setIsDetailOpen: (isOpen: boolean) => void;
   }

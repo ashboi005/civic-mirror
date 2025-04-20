@@ -5,7 +5,7 @@ import { TabsContainerProps } from "@/types"
 
 export function TabsContainer({
   filteredTickets,
-  handleUpvote,
+  
   setSelectedTicket,
   setIsDetailOpen,
 }: TabsContainerProps) {
@@ -17,7 +17,7 @@ export function TabsContainer({
         <TicketCard
           key={ticket.id}
           ticket={ticket}
-          onUpvote={handleUpvote}
+          
           onViewDetails={() => {
             setSelectedTicket(ticket)
             setIsDetailOpen(true)
@@ -33,7 +33,6 @@ export function TabsContainer({
         <TicketCard
           key={ticket.id}
           ticket={ticket}
-          onUpvote={handleUpvote}
           onViewDetails={() => {
             setSelectedTicket(ticket)
             setIsDetailOpen(true)

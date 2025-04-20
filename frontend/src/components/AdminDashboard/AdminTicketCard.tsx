@@ -8,9 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { TicketStatusBadge } from "./AdminTicketStatus"
 import { TicketCardProps } from "@/types"  // Import the type for props
 
-export function TicketCard({ ticket, onUpvote, onViewDetails }: TicketCardProps) {
-  // Function to check if a user has already voted
-  const hasVoted = (userId: number) => ticket.votes.includes(userId.toString())
+export function TicketCard({ ticket,  onViewDetails }: TicketCardProps) {
 
   return (
     <Card className="overflow-hidden">
@@ -76,8 +74,8 @@ export function TicketCard({ ticket, onUpvote, onViewDetails }: TicketCardProps)
             variant="ghost"
             size="sm"
             className="gap-1"
-            onClick={() => onUpvote(ticket.id)}
-            disabled={hasVoted(1)} // Replace 1 with actual user ID when implemented
+          
+          
           >
             <ThumbsUp className="h-4 w-4" />
             <span>{ticket.vote_count}</span>

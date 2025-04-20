@@ -6,7 +6,7 @@ export function TicketStatusBadge({ status }: TicketStatusBadgeProps) {
   switch (status) {
     case "pending":
       return <Badge variant="secondary">Pending</Badge>
-    case "in-progress":
+    case "in_progress":
       return (
         <Badge variant="default" className="bg-blue-600">
           In Progress
