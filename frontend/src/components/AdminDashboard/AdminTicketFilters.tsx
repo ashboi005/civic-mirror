@@ -12,10 +12,10 @@ export function TicketFilters({
   return (
     <div className="flex flex-col w-full sm:flex-row gap-4 justify-between">
       <div className="relative flex-1 w-full">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground dark:bg-neutral-700" />
         <Input
           placeholder="Search tickets..."
-          className="pl-8 bg-white w-full"
+          className="pl-8 bg-white w-full dark:bg-neutral-700"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
