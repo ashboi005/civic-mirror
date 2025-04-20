@@ -69,13 +69,13 @@ export function HeroSection() {
             </motion.div>
           </div>
           <motion.div 
-            className="relative lg:ml-auto"
+            className="relative md:block w-full mt-8 lg:mt-0"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
             <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl blur-xl opacity-20 animate-pulse"></div>
-            <div className="relative">
+            <div className="relative z-10">
               <HeroAnimation />
             </div>
           </motion.div>

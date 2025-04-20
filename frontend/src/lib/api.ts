@@ -3,7 +3,7 @@ import axios from "axios";
 import { handleAuthError } from "./auth";
 
 // Create axios instance with base URL and default config
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://gqbfx40i89.execute-api.ap-south-1.amazonaws.com/Prod";
 
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';

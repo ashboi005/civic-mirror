@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { MapPin, Filter, Plus, ArrowLeft, Loader2 } from "lucide-react"
 import { IssueCard } from "@/components/issue-card"
 import { ReportIssueForm } from "@/components/report-issue-form"
-import { MapView } from "@/components/map-view"
+
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
@@ -227,7 +227,6 @@ function DashboardContent() {
                 ) : (
                   <Card className="border-gray-800 bg-black/40 backdrop-blur-sm overflow-hidden">
                     <CardContent className="p-0">
-                      <MapView issues={filteredReports} />
                     </CardContent>
                   </Card>
                 )}
