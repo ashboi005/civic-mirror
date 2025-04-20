@@ -1,5 +1,4 @@
 import axios from 'axios';
-import api from './api';
 
 // Types for authentication
 export interface User {
@@ -35,6 +34,9 @@ const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const TOKEN_TYPE_KEY = 'token_type';
 
+// API base URL - define it here to avoid circular dependencies
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://855amc8i0k.execute-api.ap-south-1.amazonaws.com/Prod";
+
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';
 
@@ -47,7 +49,7 @@ export const login = async (username: string, password: string): Promise<AuthTok
 
   try {
     const response = await axios.post(
-      `${api.defaults.baseURL}/auth/login`, 
+      `${API_BASE_URL}/auth/login`, 
       formData.toString(),
       {
         headers: {
@@ -75,7 +77,11 @@ export const login = async (username: string, password: string): Promise<AuthTok
 
 export const register = async (userData: UserRegisterData): Promise<User> => {
   try {
-    const response = await api.post('/auth/register', userData);
+    const response = await axios.post(`${API_BASE_URL}/auth/register`, userData, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
     return response.data;
   } catch (error) {
     console.error('Registration failed:', error);
@@ -83,22 +89,23 @@ export const register = async (userData: UserRegisterData): Promise<User> => {
   }
 };
 
-export const refreshToken = async (): Promise<AuthTokens> => {
+export const refreshToken = async (): Promise<AuthTokens | null> => {
   if (!isBrowser) {
-    throw new Error('Cannot refresh token in non-browser environment');
+    console.log('Cannot refresh token in non-browser environment');
+    return null;
   }
   
   const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
   
   if (!refreshToken) {
-    // Instead of immediately throwing, clear any stale tokens and redirect to auth flow
+    console.log('No refresh token available');
     logout();
-    throw new Error('No refresh token available');
+    return null;
   }
   
   try {
     const response = await axios.post(
-      `${api.defaults.baseURL}/auth/refresh`, 
+      `${API_BASE_URL}/auth/refresh`, 
       { token: refreshToken },
       {
         headers: {
@@ -118,7 +125,7 @@ export const refreshToken = async (): Promise<AuthTokens> => {
   } catch (error) {
     console.error('Token refresh failed:', error);
     logout(); // Clear tokens if refresh fails
-    throw error;
+    return null;
   }
 };
 
@@ -127,13 +134,40 @@ export const getCurrentUser = async (): Promise<User | null> => {
     return null;
   }
   
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const tokenType = localStorage.getItem(TOKEN_TYPE_KEY) || 'Bearer';
+  
   try {
-    const response = await api.get('/auth/me');
+    const response = await axios.get(`${API_BASE_URL}/auth/me`, {
+      headers: {
+        'Authorization': `${tokenType} ${token}`
+      }
+    });
     return response.data;
   } catch (error) {
     console.error('Failed to get current user:', error);
     if (axios.isAxiosError(error) && error.response?.status === 401) {
-      logout(); // Clear tokens on auth failure
+      // Try to refresh the token
+      const newTokens = await refreshToken();
+      
+      if (newTokens) {
+        // Retry with new token
+        try {
+          const retryResponse = await axios.get(`${API_BASE_URL}/auth/me`, {
+            headers: {
+              'Authorization': `${newTokens.token_type} ${newTokens.access_token}`
+            }
+          });
+          return retryResponse.data;
+        } catch (retryError) {
+          console.error('Failed to get user after token refresh:', retryError);
+          logout();
+          return null;
+        }
+      } else {
+        logout();
+        return null;
+      }
     }
     return null;
   }
@@ -144,6 +178,11 @@ export const logout = (): void => {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(TOKEN_TYPE_KEY);
+    
+    // Force reload to clear any in-memory state
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   }
 };
 
@@ -169,40 +208,41 @@ export const isAuthenticated = (): boolean => {
   return !!localStorage.getItem(ACCESS_TOKEN_KEY);
 };
 
-// Setup axios interceptor to handle token refresh
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+// Create a function to handle authentication errors that can be used with axios interceptors
+export const handleAuthError = async (error: any) => {
+  const originalRequest = error.config;
+  
+  // If error is 401 and we haven't tried to refresh the token yet
+  if (error.response?.status === 401 && !originalRequest._retry) {
+    originalRequest._retry = true;
     
-    // If error is 401 and we haven't tried to refresh the token yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        // Only try to refresh if we have a refresh token
-        if (!isBrowser || !localStorage.getItem(REFRESH_TOKEN_KEY)) {
-          throw new Error('No refresh token available');
-        }
-        
-        // Try to refresh the token
-        const tokens = await refreshToken();
-        
-        // Update the authorization header
-        originalRequest.headers.Authorization = `${tokens.token_type} ${tokens.access_token}`;
-        
-        // Retry the original request
-        return axios(originalRequest);
-      } catch (refreshError) {
-        // If refresh fails, redirect to login
-        logout();
-        return Promise.reject(refreshError);
+    try {
+      // Only try to refresh if we have a refresh token
+      if (!isBrowser || !localStorage.getItem(REFRESH_TOKEN_KEY)) {
+        throw new Error('No refresh token available');
       }
+      
+      // Try to refresh the token
+      const tokens = await refreshToken();
+      
+      if (!tokens) {
+        throw new Error('Failed to refresh token');
+      }
+      
+      // Update the authorization header
+      originalRequest.headers.Authorization = `${tokens.token_type} ${tokens.access_token}`;
+      
+      // Retry the original request
+      return axios(originalRequest);
+    } catch (refreshError) {
+      // If refresh fails, redirect to login
+      logout();
+      return Promise.reject(refreshError);
     }
-    
-    return Promise.reject(error);
   }
-);
+  
+  return Promise.reject(error);
+};
 
 export default {
   login,
@@ -212,4 +252,5 @@ export default {
   getCurrentUser,
   getAuthHeader,
   isAuthenticated,
+  handleAuthError,
 };

@@ -74,11 +74,20 @@ function DashboardContent() {
   }
 
   // Filter reports based on selected filter
-  const filteredReports = filter === "mine" 
-    ? userReports 
-    : filter === "nearby" 
-      ? reports.slice(0, 5) // Simplified nearby filter - would need geolocation in a real app
-      : reports
+  const getFilteredReports = () => {
+    let result;
+    if (filter === "mine") {
+      result = userReports || [];
+    } else if (filter === "nearby") {
+      result = reports?.slice(0, 5) || [];
+    } else {
+      result = reports || [];
+    }
+    // Ensure we always return an array
+    return Array.isArray(result) ? result : [];
+  }
+
+  const filteredReports = getFilteredReports();
 
   const container = {
     hidden: { opacity: 0 },

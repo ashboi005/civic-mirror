@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Layers, ZoomIn, ZoomOut, MapPin, Loader2, Navigation } from "lucide-react"
+import { MapPin, Loader2, Navigation } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { motion } from "framer-motion"
@@ -171,7 +171,7 @@ export default function MapPage() {
     return R * c;
   };
 
-  // Fix the onSelectIssue prop type issue by creating a wrapper function
+  // Handle issue selection
   const handleSelectIssue = (issue: MapReport) => {
     setSelectedIssue(issue);
   };
@@ -303,38 +303,6 @@ export default function MapPage() {
                       selectedIssueId={selectedIssue?.id}
                       userLocation={userLocation}
                     />
-                    <div className="absolute top-4 right-4 flex flex-col gap-2">
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="h-8 w-8 rounded-full bg-gray-800/80 backdrop-blur-sm"
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="h-8 w-8 rounded-full bg-gray-800/80 backdrop-blur-sm"
-                      >
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="h-8 w-8 rounded-full bg-gray-800/80 backdrop-blur-sm"
-                      >
-                        <Layers className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {userLocation && (
-                      <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm p-2 rounded-md shadow-lg text-xs flex items-center gap-2">
-                        <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                        <span>Your Location</span>
-                        {filter === "nearby" && (
-                          <span className="ml-1 text-gray-400">({proximityRadius}km radius)</span>
-                        )}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </motion.div>
