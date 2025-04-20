@@ -11,6 +11,7 @@ from app.schemas.report import ReportCreate, Report as ReportSchema, ReportWithV
 from app.schemas.vote import VoteCreate, Vote as VoteSchema
 from app.utils.deps import get_current_user
 from app.utils.s3 import upload_base64_image_to_s3
+from app.utils.ml_client import classify_image, map_classification_to_report_type
 from typing import Any, List, Optional
 import json
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -85,21 +86,22 @@ async def create_report(
             # Decide if upload failure should prevent report creation
             # raise HTTPException(status_code=400, detail=f"Image upload failed: {str(e)}")
 
-        # 2. Classify image with Gemini
+        # 2. Classify image with custom ML model
         try:
-            logger.info("Attempting Gemini image classification...")
-            # response = await classify_image(report.base64_image)
-            response = "garbage"  # Placeholder for actual classification result
+            logger.info("Attempting custom ML image classification...")
+            # Call the ML API with the base64 image
+            classification_result = await classify_image(report.base64_image)
             
-            # Directly check if the response is in VALID_ROLES
-            if response in VALID_ROLES:
-                logger.info(f"Gemini classification successful: {response}")
-                report_type = response
+            if classification_result:
+                # Map the ML classification to our report types
+                mapped_type = map_classification_to_report_type(classification_result)
+                logger.info(f"ML classification successful: {classification_result} → {mapped_type}")
+                report_type = mapped_type
             else:
-                logger.warning(f"Gemini classification returned unexpected result: '{response}'. Defaulting to 'miscellaneous'.")
+                logger.warning(f"ML classification failed or returned null. Defaulting to 'miscellaneous'.")
                 report_type = "miscellaneous"
         except Exception as e:
-            logger.error(f"Gemini classification failed: {str(e)}", exc_info=True)
+            logger.error(f"ML classification failed: {str(e)}", exc_info=True)
             logger.warning(f"Falling back to user-provided type: {report.type}")
             report_type = report.type  # Explicitly fall back
 
@@ -341,4 +343,4 @@ async def vote_for_report(
     await db.commit()
     await db.refresh(new_vote)
     
-    return new_vote 
+    return new_vote
