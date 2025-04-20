@@ -1,14 +1,14 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
-from app.models.report import ReportType, ReportStatus
+from app.models.report import ReportStatus
 from enum import Enum
 
 
 class ReportBase(BaseModel):
     title: str
     description: Optional[str] = None
-    type: str = ReportType.MISCELLANEOUS
+    type: Optional[str] = None
     location: Optional[str] = None
 
 

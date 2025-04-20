@@ -50,6 +50,10 @@ Parameters:
     Type: String
     Description: "Pusher Cluster"
 
+  GeminiApiKey:
+    Type: String
+    Description: "Gemini API Key"
+
 Resources:
   FastApiFunction:
     Type: AWS::Serverless::Function
@@ -92,6 +96,7 @@ Resources:
           PUSHER_KEY: !Ref PusherKey
           PUSHER_SECRET: !Ref PusherSecret
           PUSHER_CLUSTER: !Ref PusherCluster
+          GOOGLE_GEMINI_API_KEY: !Ref GeminiApiKey
       Events:
         ApiEvent:
           Type: Api
