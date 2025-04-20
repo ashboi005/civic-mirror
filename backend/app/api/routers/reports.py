@@ -11,7 +11,6 @@ from app.schemas.report import ReportCreate, Report as ReportSchema, ReportWithV
 from app.schemas.vote import VoteCreate, Vote as VoteSchema
 from app.utils.deps import get_current_user
 from app.utils.s3 import upload_base64_image_to_s3
-# from app.utils.gemini import classify_image
 from typing import Any, List, Optional
 import json
 from fastapi.openapi.docs import get_swagger_ui_html
